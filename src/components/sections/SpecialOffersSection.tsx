@@ -9,7 +9,7 @@
  * 실제 예약 이동은 모달 내부 기존 CTA에서만 발생
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Locale } from '@/types';
@@ -30,17 +30,56 @@ const tabs: { key: TabType; label: { ko: string; en: string; ja: string; zh: str
 export default function SpecialOffersSection({ locale }: SpecialOffersSectionProps) {
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  // Element that opened the modal, so focus can be handed back on close.
+  const openerRef = useRef<HTMLElement | null>(null);
 
   const loc = locale as 'ko' | 'en' | 'ja' | 'zh';
 
-  // 모달 Escape 닫기
+  const openOffer = (offer: Offer, event: { currentTarget: HTMLElement }) => {
+    openerRef.current = event.currentTarget;
+    setSelectedOffer(offer);
+  };
+
+  // 모달 Escape 닫기 + Tab 포커스 가두기
   useEffect(() => {
     if (!selectedOffer) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedOffer(null);
+      if (e.key === 'Escape') {
+        setSelectedOffer(null);
+        return;
+      }
+      if (e.key !== 'Tab' || !modalRef.current) return;
+
+      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOffer]);
+
+  // 모달이 열리면 포커스를 안으로, 닫히면 열었던 요소로 되돌린다
+  useEffect(() => {
+    if (selectedOffer) {
+      modalRef.current?.focus();
+    } else {
+      openerRef.current?.focus();
+      openerRef.current = null;
+    }
   }, [selectedOffer]);
 
   // 모달 열릴 때 body 스크롤 잠금
@@ -107,10 +146,21 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
         {/* Offers Grid — 카드 클릭 → 모달 오픈 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {filteredOffers.map((offer) => (
+            // A plain div with onClick was unreachable by keyboard — the whole
+            // offers grid could not be operated without a mouse.
             <div
               key={offer.id}
-              onClick={() => setSelectedOffer(offer)}
-              className="group bg-white overflow-hidden cursor-pointer"
+              role="button"
+              tabIndex={0}
+              aria-haspopup="dialog"
+              onClick={(e) => openOffer(offer, e)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openOffer(offer, e);
+                }
+              }}
+              className="group bg-white overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
             >
               {/* Image */}
               <div className="aspect-[4/3] relative overflow-hidden">
@@ -156,7 +206,7 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
                   </span>
                   {offer.showHomeCta ? (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedOffer(offer); }}
+                      onClick={(e) => { e.stopPropagation(); openOffer(offer, e); }}
                       className="text-xs font-medium text-accent-600 hover:text-accent-700 tracking-wide transition-colors"
                     >
                       {ctaLabel[locale]}
@@ -209,32 +259,41 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
 
           {/* Modal Content */}
           <div
-            className="relative bg-white max-w-2xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto animate-fade-in-up shadow-2xl rounded-lg sm:rounded-none"
+            ref={modalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="offer-modal-title"
+            tabIndex={-1}
+            className="relative bg-white max-w-2xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto animate-fade-in-up shadow-2xl rounded-lg sm:rounded-none focus:outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button — 모바일 터치 영역 확대 */}
             <button
               onClick={() => setSelectedOffer(null)}
+              aria-label={closeLabel[locale]}
               className="absolute top-3 right-3 z-10 w-11 h-11 flex items-center justify-center bg-black/40 rounded-full text-white/90 hover:text-white hover:bg-black/60 transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
             {/* Image */}
             <div className="aspect-[16/9] relative overflow-hidden">
-              <img
+              <Image
                 src={selectedOffer.image}
                 alt={selectedOffer.title[loc]}
-                className={`w-full h-full object-cover ${selectedOffer.id === 5 ? 'scale-[1.35]' : ''}`}
+                fill
+                sizes="(max-width: 768px) 100vw, 672px"
+                quality={80}
+                className={`object-cover ${selectedOffer.id === 5 ? 'scale-[1.35]' : ''}`}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 p-8">
                 <span className="text-xs text-accent-400 tracking-widest uppercase font-medium">
                   {selectedOffer.subtitle[loc]}
                 </span>
-                <h2 className="text-2xl md:text-3xl font-serif text-white mt-2 tracking-wide">
+                <h2 id="offer-modal-title" className="text-2xl md:text-3xl font-serif text-white mt-2 tracking-wide">
                   {selectedOffer.title[loc]}
                 </h2>
               </div>
@@ -284,8 +343,10 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
                   </a>
                 )}
                 {selectedOffer.id === 4 && (
+                  // Stay in the visitor's locale — this used to hard-code /en,
+                  // dropping Korean/Japanese/Chinese visitors into English.
                   <a
-                    href="/en/booking?promo=military"
+                    href={`/${locale}/booking?promo=military`}
                     className="block w-full sm:w-auto text-center px-10 py-4 sm:py-3 bg-accent-500 text-primary-900 text-sm font-bold tracking-widest uppercase transition-all duration-300 hover:bg-primary-900 hover:text-white"
                   >
                     US Military Special — Book Now

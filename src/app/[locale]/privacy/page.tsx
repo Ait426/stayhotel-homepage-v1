@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { Locale } from '@/types';
 import { getBrandConfig } from '@/config/brand';
+import { buildAlternates } from '@/lib/seo';
 
 interface PageProps {
   params: { locale: string };
@@ -14,7 +15,10 @@ export async function generateMetadata({ params }: PageProps) {
     ja: 'プライバシーポリシー',
     zh: '隐私政策',
   };
-  return { title: titles[params.locale] || titles.en };
+  return {
+    title: titles[params.locale] || titles.en,
+    alternates: buildAlternates(params.locale, '/privacy'),
+  };
 }
 
 const content: Record<string, { title: string; lastUpdated: string; sections: { heading: string; body: string[] }[] }> = {

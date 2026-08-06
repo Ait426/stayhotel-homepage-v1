@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 
 import { createTranslator } from '@/lib/translations';
+import { buildAlternates } from '@/lib/seo';
 import { fetchNaverBlogPosts, getNaverBlogId } from '@/lib/utils/blog';
 import BlogList from '@/components/BlogList';
 
@@ -13,6 +14,7 @@ export async function generateMetadata({ params }: PageProps) {
     return {
         title: t('title'),
         description: t('subtitle'),
+        alternates: buildAlternates(params.locale, '/blog'),
     };
 }
 

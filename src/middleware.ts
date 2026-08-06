@@ -1,8 +1,8 @@
 /**
  * Next.js Middleware for Internationalization
  *
- * Custom middleware that handles locale detection and redirects
- * without depending on next-intl's config file.
+ * Hand-rolled locale detection and redirects (the project does not use
+ * next-intl; see src/lib/translations.tsx for the translation layer).
  */
 
 import { NextResponse } from 'next/server';

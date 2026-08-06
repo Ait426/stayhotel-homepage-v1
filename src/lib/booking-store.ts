@@ -8,23 +8,28 @@
  * 1. Create KV namespace "stayhotel-bookings" in Cloudflare dashboard
  * 2. Bind it as "BOOKING_KV" in Pages → Settings → Functions → KV namespace bindings
  *
- * Bookings expire after 30 days (KV TTL).
+ * Bookings are retained indefinitely (no KV TTL) — see retention note below.
  */
 
 import { getRequestContext } from '@cloudflare/next-on-pages';
 import { BookingFormData } from '@/types';
+import type { Currency, PromoCode } from '@/lib/promo';
 
 /**
- * 서버에서 계산한 가격 snapshot — 이메일/admin 공통 기준
+ * 서버에서 계산한 가격 snapshot — 이메일/admin/확정페이지 공통 기준
+ *
+ * `currency`가 이 snapshot의 유일한 통화 기준이다. 미군 특가는 USD,
+ * 나머지는 KRW. 금액을 표시하는 모든 곳은 반드시 이 필드를 따라야 한다.
  */
 export interface PricingSnapshot {
-  baseAmount: number;         // 객실 요금 합계 (요일별 적용)
+  baseAmount: number;         // 객실 요금 합계 (요일별 적용, 항상 KRW)
   extraGuestCount: number;    // 기준 초과 인원 수
-  extraGuestFeeUnit: number;  // 1인/1박 추가요금 단가 (₩10,000)
+  extraGuestFeeUnit: number;  // 1인/1박 추가요금 단가
   extraGuestFeeTotal: number; // 추가 인원 요금 합계
   discountAmount: number;     // 할인 금액 (프로모션)
-  finalAmount: number;        // 최종 결제 금액
+  finalAmount: number;        // 최종 결제 금액 (currency 단위)
   nights: number;             // 숙박 일수
+  currency: Currency;         // finalAmount의 통화 — 'KRW' | 'USD'
 }
 
 export interface StoredBooking {
@@ -38,8 +43,8 @@ export interface StoredBooking {
   cancelReason?: string;
   cancelledBy?: 'hotel' | 'customer' | 'admin';
   agreedAt: string; // ISO timestamp — legal proof of cancellation policy agreement
-  appliedPromo?: 'longstay_10' | 'longstay_15' | 'military_fixed' | null;
-  finalAmount?: number; // Discounted total (KRW) — source of truth for emails/admin
+  appliedPromo?: PromoCode | null; // 서버가 승인한 프로모션만 저장됨
+  finalAmount?: number; // Discounted total in `pricing.currency` — source of truth for emails/admin
   pricing?: PricingSnapshot; // 서버 계산 가격 snapshot
 }
 
@@ -51,8 +56,23 @@ interface KVLike {
   put(key: string, value: string): Promise<void>;
 }
 
-// In-memory fallback for local development (next dev)
-const memoryStore = new Map<string, string>();
+/**
+ * In-memory fallback, local development only.
+ *
+ * IMPORTANT — this store is per-route, not global. Next runs each edge route in
+ * its own VM context, so a booking written by /api/booking-request is *not*
+ * visible to /api/admin/bookings. The admin dashboard will therefore always look
+ * empty under plain `next dev` / `next start`.
+ *
+ * That is a limitation of the local edge emulation, not of the code: in
+ * production both routes talk to the same BOOKING_KV namespace. To exercise the
+ * dashboard locally, run `wrangler pages dev` with a KV binding attached.
+ *
+ * (Exported so the admin route can share this definition instead of declaring a
+ * second, subtly different one — it previously kept its own copy with a comment
+ * claiming they were the same Map.)
+ */
+export const memoryStore = new Map<string, string>();
 const memoryFallback: KVLike = {
   async get(key: string) { return memoryStore.get(key) ?? null; },
   async put(key: string, value: string) { memoryStore.set(key, value); },

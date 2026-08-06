@@ -3,8 +3,8 @@ export const runtime = 'edge';
 /**
  * Root Layout
  *
- * This is a minimal root layout for Next.js App Router with next-intl.
- * The locale-specific layout handles navigation and footer.
+ * Minimal root layout for the App Router.
+ * The locale-specific layout handles navigation, footer and translations.
  */
 
 import type { Metadata } from 'next';

@@ -78,28 +78,46 @@ export function calculateTotalPrice(
 }
 
 /**
- * Get today's date in YYYY-MM-DD format
+ * The hotel's calendar day. Dates must be resolved in Asia/Seoul, not UTC:
+ * `toISOString()` returns the previous day between 00:00 and 09:00 KST, which
+ * made the booking bar default to a check-in date already in the past.
+ *
+ * Using an explicit time zone also keeps the server render and the client
+ * hydration in agreement regardless of where either one runs.
+ */
+export const HOTEL_TIME_ZONE = 'Asia/Seoul';
+
+/** en-CA formats as YYYY-MM-DD, which is exactly the wire format we use. */
+const seoulDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: HOTEL_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * Get today's date at the hotel, in YYYY-MM-DD format.
  */
 export function getTodayString(): string {
-  return new Date().toISOString().split('T')[0];
+  return seoulDateFormatter.format(new Date());
+}
+
+/**
+ * Get date N days from today (hotel time), in YYYY-MM-DD format.
+ */
+export function getDateFromNow(days: number): string {
+  // Shift by whole days on the already-localised date so DST/offset changes
+  // can't push the result onto the wrong calendar day.
+  const [y, m, d] = getTodayString().split('-').map(Number);
+  const shifted = new Date(Date.UTC(y, m - 1, d + days));
+  return shifted.toISOString().split('T')[0];
 }
 
 /**
  * Get tomorrow's date in YYYY-MM-DD format
  */
 export function getTomorrowString(): string {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toISOString().split('T')[0];
-}
-
-/**
- * Get date N days from now in YYYY-MM-DD format
- */
-export function getDateFromNow(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().split('T')[0];
+  return getDateFromNow(1);
 }
 
 /**

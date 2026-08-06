@@ -1,5 +1,7 @@
 export const runtime = 'edge';
 
+import { buildAlternates } from '@/lib/seo';
+
 interface PageProps {
     params: { locale: string };
 }
@@ -8,6 +10,7 @@ export async function generateMetadata({ params }: PageProps) {
     return {
         title: { ko: '부대시설', en: 'Facilities', ja: '施設', zh: '设施' }[params.locale] || 'Facilities',
         description: { ko: '다양한 부대시설을 즐겨보세요.', en: 'Enjoy our various facilities.', ja: '多彩な施設をお楽しみください。', zh: '享受我们的各种设施。' }[params.locale] || 'Enjoy our various facilities.',
+        alternates: buildAlternates(params.locale, '/facilities'),
     };
 }
 

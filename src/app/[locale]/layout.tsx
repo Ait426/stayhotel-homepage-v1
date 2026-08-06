@@ -19,6 +19,7 @@ import Footer from '@/components/Footer';
 import TawkToWidget from '@/components/TawkToWidget';
 import { getBrandConfig } from '@/config/brand';
 import { getMessages, TranslationProvider } from '@/lib/translations';
+import { LOCALE_META, OG_IMAGE, SeoLocale } from '@/lib/seo';
 
 // Supported locales
 const locales = ['ko', 'en', 'ja', 'zh'] as const;
@@ -50,24 +51,28 @@ export async function generateMetadata({
   const brandName = brand.name[locale] || brand.name.en;
   const tagline = brand.tagline[locale] || brand.tagline.en;
 
-  const ogLocaleMap: Record<string, string> = {
-    ko: 'ko_KR',
-    en: 'en_US',
-    ja: 'ja_JP',
-    zh: 'zh_CN',
-  };
-
   return {
+    // `absolute` keeps the brand name from being appended to itself — the old
+    // `default` value was fed back through this same template, producing
+    // "STAY HOTEL in PYEONGTAEK | STAY HOTEL in PYEONGTAEK".
     title: {
-      default: brandName,
+      absolute: `${brandName} — ${tagline}`,
       template: `%s | ${brandName}`,
     },
     description: tagline,
     openGraph: {
       title: brandName,
       description: tagline,
-      locale: ogLocaleMap[locale] || 'en_US',
+      siteName: brandName,
+      locale: LOCALE_META[locale as SeoLocale]?.og || 'ko_KR',
       type: 'website',
+      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: brandName }],
+    },
+    twitter: {
+      card: 'summary_large_image' as const,
+      title: brandName,
+      description: tagline,
+      images: [OG_IMAGE],
     },
   };
 }

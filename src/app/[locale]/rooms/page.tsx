@@ -10,6 +10,7 @@ import { Locale } from '@/types';
 import { rooms } from '@/config/rooms';
 import RoomCard from '@/components/RoomCard';
 import { createTranslator } from '@/lib/translations';
+import { buildAlternates } from '@/lib/seo';
 
 interface RoomsPageProps {
   params: { locale: string };
@@ -21,6 +22,7 @@ export async function generateMetadata({ params }: RoomsPageProps) {
   return {
     title: t('title'),
     description: t('subtitle'),
+    alternates: buildAlternates(params.locale, '/rooms'),
   };
 }
 

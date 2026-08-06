@@ -1,6 +1,7 @@
 export const runtime = 'edge';
 
 import { createTranslator } from '@/lib/translations';
+import { buildAlternates } from '@/lib/seo';
 
 interface PageProps {
     params: { locale: string };
@@ -11,6 +12,7 @@ export async function generateMetadata({ params }: PageProps) {
     return {
         title: t('title'),
         description: t('subtitle'),
+        alternates: buildAlternates(params.locale, '/location'),
     };
 }
 

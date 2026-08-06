@@ -8,6 +8,7 @@ export const runtime = 'edge';
 
 import BookingForm from '@/components/BookingForm';
 import { createTranslator } from '@/lib/translations';
+import { buildAlternates } from '@/lib/seo';
 
 interface BookingPageProps {
   params: { locale: string };
@@ -27,6 +28,7 @@ export async function generateMetadata({ params }: BookingPageProps) {
   return {
     title: t('title'),
     description: t('subtitle'),
+    alternates: buildAlternates(params.locale, '/booking'),
   };
 }
 

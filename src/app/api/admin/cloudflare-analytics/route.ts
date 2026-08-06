@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
+import { isAuthorized } from '@/lib/admin-auth';
 
 function getEnv(key: string): string {
   try {
@@ -50,10 +51,8 @@ async function cfQuery(token: string, query: string): Promise<{ data: unknown; e
 }
 
 export async function GET(request: NextRequest) {
-  // --- admin 인증 ---
-  const adminKey = request.headers.get('X-Admin-Key');
-  const adminPassword = getEnv('ADMIN_PASSWORD');
-  if (!adminPassword || adminKey !== adminPassword) {
+  // --- admin 인증 (constant-time 비교) ---
+  if (!isAuthorized(request)) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 

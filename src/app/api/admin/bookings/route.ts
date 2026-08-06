@@ -13,45 +13,28 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
-
-function getAdminPassword(): string {
-  // Cloudflare Pages: env vars via getRequestContext().env
-  try {
-    const ctx = getRequestContext();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pw = (ctx.env as any).ADMIN_PASSWORD as string | undefined;
-    if (pw) return pw;
-  } catch {
-    // local dev — fall through
-  }
-  // Fallback: process.env (next dev / .env.local)
-  return process.env.ADMIN_PASSWORD || '';
-}
+import { isAuthorized } from '@/lib/admin-auth';
+import { memoryStore } from '@/lib/booking-store';
 
 interface KVLike {
   get(key: string): Promise<string | null>;
-  list(options?: { prefix?: string }): Promise<{ keys: { name: string }[] }>;
+  list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
+    keys: { name: string }[];
+    list_complete: boolean;
+    cursor?: string;
+  }>;
 }
 
-// Mirror of the in-memory fallback from booking-store.ts
-const memoryStore = (() => {
-  // Access the same module-level Map used by booking-store
-  // We re-import the pattern so list() works for local dev
-  const store = new Map<string, string>();
-  return {
-    _map: store,
-    async get(key: string) { return store.get(key) ?? null; },
-    async list(options?: { prefix?: string }) {
-      const keys: { name: string }[] = [];
-      for (const k of Array.from(store.keys())) {
-        if (!options?.prefix || k.startsWith(options.prefix)) {
-          keys.push({ name: k });
-        }
-      }
-      return { keys };
-    },
-  } satisfies KVLike & { _map: Map<string, string> };
-})();
+// Local-dev fallback backed by the *same* Map that booking-store writes to.
+const memoryFallback: KVLike = {
+  async get(key: string) { return memoryStore.get(key) ?? null; },
+  async list(options?: { prefix?: string }) {
+    const keys = Array.from(memoryStore.keys())
+      .filter((k) => !options?.prefix || k.startsWith(options.prefix))
+      .map((name) => ({ name }));
+    return { keys, list_complete: true };
+  },
+};
 
 function getStore(): KVLike {
   try {
@@ -63,14 +46,12 @@ function getStore(): KVLike {
   } catch {
     // local dev — fall through
   }
-  return memoryStore;
+  return memoryFallback;
 }
 
 export async function GET(request: NextRequest) {
-  // --- Auth gate (server-side, env var) ---
-  const key = request.headers.get('X-Admin-Key');
-  const adminPassword = getAdminPassword();
-  if (!adminPassword || key !== adminPassword) {
+  // --- Auth gate (server-side, env var, constant-time) ---
+  if (!isAuthorized(request)) {
     return NextResponse.json(
       { success: false, error: 'Unauthorized' },
       { status: 401 }
@@ -79,11 +60,20 @@ export async function GET(request: NextRequest) {
 
   try {
     const kv = getStore();
-    const listed = await kv.list({ prefix: 'booking:' });
+
+    // KV list()는 한 번에 최대 1000키만 돌려준다. 커서를 따라가지 않으면
+    // 1001번째 예약부터 대시보드에서 조용히 사라진다.
+    const keys: { name: string }[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await kv.list({ prefix: 'booking:', cursor });
+      keys.push(...page.keys);
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor && keys.length < 5000);
 
     // Fetch all booking values
     const bookings = await Promise.all(
-      listed.keys.map(async ({ name }) => {
+      keys.map(async ({ name }) => {
         const raw = await kv.get(name);
         if (!raw) return null;
         try { return JSON.parse(raw); } catch { return null; }

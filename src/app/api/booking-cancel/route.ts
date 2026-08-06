@@ -15,28 +15,15 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getRequestContext } from '@cloudflare/next-on-pages';
 import { cancelBooking, getBookingByToken } from '@/lib/booking-store';
 import { sendCancellationEmail } from '@/lib/email';
 import { getRoomById, getRoomName } from '@/config/rooms';
-
-function getAdminPassword(): string {
-  try {
-    const ctx = getRequestContext();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pw = (ctx.env as any).ADMIN_PASSWORD as string | undefined;
-    if (pw) return pw;
-  } catch {
-    // local dev — fall through
-  }
-  return process.env.ADMIN_PASSWORD || '';
-}
+import { esc } from '@/lib/html';
+import { isAuthorized } from '@/lib/admin-auth';
 
 export async function POST(request: NextRequest) {
-  // --- 관리자 인증 ---
-  const key = request.headers.get('X-Admin-Key');
-  const adminPassword = getAdminPassword();
-  if (!adminPassword || key !== adminPassword) {
+  // --- 관리자 인증 (constant-time 비교) ---
+  if (!isAuthorized(request)) {
     return NextResponse.json(
       { success: false, error: '인증 실패' },
       { status: 401 }
@@ -122,14 +109,18 @@ export async function POST(request: NextRequest) {
 // booking-confirm GET과 대칭 구조
 // ========================================
 
-function htmlPage(title: string, message: string, details?: string, isError = false) {
-  const statusColor = isError ? '#dc2626' : '#dc2626';
+/**
+ * `message`와 `details`는 호출부에서 이미 escape된 HTML 조각이다.
+ * `title`은 여기서 escape한다.
+ */
+function htmlPage(title: string, message: string, details?: string) {
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - STAY HOTEL</title>
+  <meta name="robots" content="noindex, nofollow">
+  <title>${esc(title)} - STAY HOTEL</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -142,13 +133,13 @@ function htmlPage(title: string, message: string, details?: string, isError = fa
     .details .row:last-child { border-bottom: none; }
     .details .label { color: #888; }
     .details .value { font-weight: 600; }
-    .status { display: inline-block; margin-top: 16px; padding: 6px 16px; background: #fef2f2; color: ${statusColor}; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+    .status { display: inline-block; margin-top: 16px; padding: 6px 16px; background: #fef2f2; color: #dc2626; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">STAY HOTEL</div>
-    <h1>${title}</h1>
+    <h1>${esc(title)}</h1>
     <p>${message}</p>
     ${details || ''}
   </div>
@@ -159,12 +150,13 @@ function htmlPage(title: string, message: string, details?: string, isError = fa
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token');
 
-  console.log(`[booking-cancel-GET] Received request | token: ${token || '(none)'}`);
+  // 토큰은 취소 권한 그 자체이므로 값을 로그에 남기지 않는다
+  console.log(`[booking-cancel-GET] Received request | token present: ${Boolean(token)}`);
 
   // token 없음
   if (!token) {
     return new NextResponse(
-      htmlPage('잘못된 요청', '유효하지 않은 링크입니다.', undefined, true),
+      htmlPage('잘못된 요청', '유효하지 않은 링크입니다.'),
       { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
   }
@@ -173,7 +165,7 @@ export async function GET(request: NextRequest) {
   const existing = await getBookingByToken(token);
   if (!existing) {
     return new NextResponse(
-      htmlPage('예약을 찾을 수 없습니다', '유효하지 않거나 만료된 링크입니다.', undefined, true),
+      htmlPage('예약을 찾을 수 없습니다', '유효하지 않거나 만료된 링크입니다.'),
       { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
   }
@@ -181,7 +173,7 @@ export async function GET(request: NextRequest) {
   // 이미 취소된 경우 — idempotent
   if (existing.status === 'cancelled') {
     return new NextResponse(
-      htmlPage('이미 취소된 예약입니다', `예약번호 ${existing.bookingId}는 이미 취소 처리되었습니다.`),
+      htmlPage('이미 취소된 예약입니다', `예약번호 ${esc(existing.bookingId)}는 이미 취소 처리되었습니다.`),
       { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
   }
@@ -190,7 +182,7 @@ export async function GET(request: NextRequest) {
   const { booking } = await cancelBooking(token, '이메일 링크를 통한 취소', 'hotel');
   if (!booking) {
     return new NextResponse(
-      htmlPage('오류 발생', '예약 취소 처리 중 오류가 발생했습니다.', undefined, true),
+      htmlPage('오류 발생', '예약 취소 처리 중 오류가 발생했습니다.'),
       { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
   }
@@ -214,22 +206,23 @@ export async function GET(request: NextRequest) {
   const room = getRoomById(data.roomId);
   const roomName = room ? getRoomName(room, 'ko') : data.roomId;
 
+  // 고객이 입력한 값은 전부 escape한다 — 직원 브라우저에서 실행되는 것을 막는다
   const detailsHtml = `
     <div class="status">CANCELLED</div>
     <div class="details">
-      <div class="row"><span class="label">예약번호</span><span class="value">${booking.bookingId}</span></div>
-      <div class="row"><span class="label">고객명</span><span class="value">${data.guestName}</span></div>
-      <div class="row"><span class="label">객실</span><span class="value">${roomName}</span></div>
-      <div class="row"><span class="label">체크인</span><span class="value">${data.checkIn}</span></div>
-      <div class="row"><span class="label">체크아웃</span><span class="value">${data.checkOut}</span></div>
+      <div class="row"><span class="label">예약번호</span><span class="value">${esc(booking.bookingId)}</span></div>
+      <div class="row"><span class="label">고객명</span><span class="value">${esc(data.guestName)}</span></div>
+      <div class="row"><span class="label">객실</span><span class="value">${esc(roomName)}</span></div>
+      <div class="row"><span class="label">체크인</span><span class="value">${esc(data.checkIn)}</span></div>
+      <div class="row"><span class="label">체크아웃</span><span class="value">${esc(data.checkOut)}</span></div>
     </div>`;
 
+  const guestMailNote = emailResult.success
+    ? `고객(${esc(data.guestEmail)})에게 취소 이메일이 발송되었습니다.`
+    : `⚠️ 예약은 취소되었으나 고객(${esc(data.guestEmail)})에게 취소 메일을 보내지 못했습니다. 직접 연락해 주세요.`;
+
   return new NextResponse(
-    htmlPage(
-      '예약이 취소되었습니다',
-      `고객(${data.guestEmail})에게 취소 이메일이 발송되었습니다.`,
-      detailsHtml
-    ),
+    htmlPage('예약이 취소되었습니다', guestMailNote, detailsHtml),
     { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
   );
 }

@@ -18,6 +18,8 @@ import {
 } from '@/config/rooms';
 import { createTranslator } from '@/lib/translations';
 import RoomImageGallery from '@/components/RoomImageGallery';
+import { buildAlternates, siteUrl } from '@/lib/seo';
+import type { Room } from '@/types';
 
 interface RoomDetailPageProps {
   params: { locale: string; roomId: string };
@@ -26,17 +28,72 @@ interface RoomDetailPageProps {
 export async function generateMetadata({ params }: RoomDetailPageProps) {
   const room = getRoomBySlug(params.roomId);
 
+  // Unknown slug renders the 404 page — keep it out of the index.
   if (!room) {
-    return { title: 'Room Not Found' };
+    return { title: 'Room Not Found', robots: { index: false, follow: false } };
   }
 
   const roomName = getRoomName(room, params.locale as Locale);
   const description = getRoomDescription(room, params.locale as Locale);
+  const primary = room.images.find((i) => i.isPrimary) || room.images[0];
 
   return {
     title: roomName,
     description: description.slice(0, 160),
+    alternates: buildAlternates(params.locale, `/rooms/${room.slug}`),
+    openGraph: {
+      title: roomName,
+      description: description.slice(0, 160),
+      images: primary ? [{ url: primary.url, alt: roomName }] : undefined,
+    },
   };
+}
+
+/**
+ * HotelRoom + Offer structured data. The page already has price, size,
+ * occupancy and bed type — surfacing it lets Google show rate-rich results.
+ */
+function RoomJsonLd({ room, locale }: { room: Room; locale: string }) {
+  const base = siteUrl();
+  const primary = room.images.find((i) => i.isPrimary) || room.images[0];
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'HotelRoom',
+    name: getRoomName(room, locale as Locale),
+    description: getRoomDescription(room, locale as Locale),
+    url: `${base}/${locale}/rooms/${room.slug}`,
+    ...(primary ? { image: `${base}${primary.url}` } : {}),
+    bed: { '@type': 'BedDetails', typeOfBed: room.bedType },
+    occupancy: { '@type': 'QuantitativeValue', maxValue: room.maxGuests, unitText: 'guests' },
+    floorSize: { '@type': 'QuantitativeValue', value: room.size, unitCode: 'MTK' },
+    amenityFeature: room.amenities.map((a) => ({
+      '@type': 'LocationFeatureSpecification',
+      name: locale === 'ko' ? a.nameKo : a.nameEn,
+      value: true,
+    })),
+    offers: {
+      '@type': 'Offer',
+      price: room.pricePerNight,
+      priceCurrency: 'KRW',
+      availability: room.isAvailable
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock',
+      url: `${base}/${locale}/booking?room=${room.id}`,
+    },
+    containedInPlace: {
+      '@type': 'Hotel',
+      name: 'STAY HOTEL in PYEONGTAEK',
+      url: base,
+    },
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
 }
 
 export default async function RoomDetailPage({ params }: RoomDetailPageProps) {
@@ -57,6 +114,7 @@ export default async function RoomDetailPage({ params }: RoomDetailPageProps) {
 
   return (
     <>
+      <RoomJsonLd room={room} locale={locale} />
       {/* Hero Section */}
       <section className="pt-[120px] md:pt-[180px] pb-10 md:pb-16 bg-primary-900">
         <div className="container-custom">
