@@ -93,6 +93,9 @@ export default function HeroSection({ locale }: HeroSectionProps) {
   }, []);
 
   const current = SLIDES[currentSlide];
+  // Wide letter-spacing and uppercase read as elegant in Latin and as broken
+  // in Hangul/Kana/Hanzi, so those treatments are gated on the locale.
+  const isLatin = locale === 'en';
 
   return (
     <section className="relative h-screen w-full overflow-hidden">
@@ -138,20 +141,28 @@ export default function HeroSection({ locale }: HeroSectionProps) {
         ))}
       </div>
 
-      {/* Content */}
-      <div className="relative z-20 h-full flex items-start justify-center px-4 pt-[26vh] md:pt-[34vh]">
-        <div className="text-center max-w-5xl">
-          <h1 className="flex flex-col items-center gap-4 md:gap-6">
-            <span
-              className="text-accent-400 text-[10px] sm:text-xs tracking-[0.3em] uppercase font-body font-medium"
-              style={{ textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}
-            >
-              {EYEBROW[locale]}
+      {/* Content — vertically centred, not pushed down from the top, so the
+          block stays balanced instead of crowding the lower half. */}
+      <div className="relative z-20 h-full flex items-center justify-center px-6">
+        <div className="text-center max-w-4xl -mt-[6vh]">
+          <h1 className="flex flex-col items-center">
+            {/* Eyebrow: hairline rules instead of wide letter-spacing. Hangul has
+                no word gaps, so tracking just makes it look broken apart. */}
+            <span className={`flex items-center gap-4 mb-6 md:mb-8 ${isLatin ? 'tracking-[0.25em] uppercase' : 'tracking-tight'}`}>
+              <span aria-hidden="true" className="hidden sm:block w-8 h-px bg-accent-400/60" />
+              <span
+                className="text-accent-400/90 text-[11px] sm:text-xs font-body font-normal"
+                style={{ textShadow: '0 1px 6px rgba(0,0,0,0.7)' }}
+              >
+                {EYEBROW[locale]}
+              </span>
+              <span aria-hidden="true" className="hidden sm:block w-8 h-px bg-accent-400/60" />
             </span>
+
             <span
               key={`title-${currentSlide}`}
-              className="text-white text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-medium leading-tight animate-fade-in-up"
-              style={{ textShadow: '0 4px 20px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3)' }}
+              className={`text-white text-[2.1rem] leading-[1.25] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-serif font-normal animate-fade-in-up ${isLatin ? 'tracking-tight' : 'tracking-[-0.01em]'}`}
+              style={{ textShadow: '0 2px 24px rgba(0,0,0,0.45)' }}
             >
               {current.title[locale]}
             </span>
@@ -159,39 +170,49 @@ export default function HeroSection({ locale }: HeroSectionProps) {
 
           <p
             key={`subtitle-${currentSlide}`}
-            className="text-white/85 text-base md:text-lg lg:text-xl mt-4 md:mt-6 tracking-wide font-light animate-fade-in-up"
-            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.4)', animationDelay: '0.15s', animationFillMode: 'both' }}
+            className="text-white/70 text-sm sm:text-base md:text-lg mt-5 md:mt-7 font-light animate-fade-in-up"
+            style={{ textShadow: '0 1px 12px rgba(0,0,0,0.5)', animationDelay: '0.15s', animationFillMode: 'both' }}
           >
             {current.subtitle[locale]}
           </p>
 
-          {/* Primary actions — phone booking matters for a regional business hotel */}
-          <div className="mt-8 md:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+          {/* One primary action. The phone number sits below as a quiet line
+              rather than inside a second button competing for attention. */}
+          <div className="mt-9 md:mt-11 flex flex-col items-center gap-5">
             <Link
               href={`/${locale}/rooms`}
-              className="w-full sm:w-auto px-10 py-3.5 bg-accent-500 text-primary-900 text-sm font-bold tracking-[0.15em] uppercase transition-colors duration-300 hover:bg-white"
+              className="inline-flex items-center gap-3 px-9 py-3.5 border border-white/50 text-white text-[13px] tracking-[0.12em] font-medium transition-colors duration-300 hover:bg-white hover:text-primary-900 hover:border-white"
             >
               {CTA[locale]}
+              <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
             </Link>
+
             <a
               href={`tel:${HOTEL_PHONE.replace(/[^\d+]/g, '')}`}
-              className="w-full sm:w-auto px-10 py-3.5 border border-white/70 text-white text-sm font-medium tracking-[0.15em] uppercase transition-colors duration-300 hover:bg-white hover:text-primary-900"
+              className="group text-white/60 hover:text-accent-400 text-xs sm:text-[13px] transition-colors"
+              style={{ textShadow: '0 1px 8px rgba(0,0,0,0.6)' }}
             >
-              {CALL[locale]} · {HOTEL_PHONE}
+              <span className="mr-2">{CALL[locale]}</span>
+              <span className="font-body tracking-[0.08em] border-b border-white/25 group-hover:border-accent-400/60 pb-0.5">
+                {HOTEL_PHONE}
+              </span>
             </a>
           </div>
         </div>
       </div>
 
-      {/* Scroll indicator */}
-      <div className="absolute bottom-16 md:bottom-24 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 opacity-70">
+      {/* Scroll indicator — sits above the dots with real clearance; the two
+          used to overlap near the bottom edge. */}
+      <div className="absolute bottom-20 md:bottom-28 left-1/2 -translate-x-1/2 z-20 hidden sm:flex flex-col items-center gap-2.5">
         <span className="sr-only">{SCROLL_HINT[locale]}</span>
-        <span aria-hidden="true" className="text-white/60 text-[10px] tracking-[0.3em] uppercase">Scroll</span>
-        <div aria-hidden="true" className="w-px h-8 bg-white/40 animate-pulse" />
+        <span aria-hidden="true" className="text-white/45 text-[9px] tracking-[0.35em] uppercase">Scroll</span>
+        <div aria-hidden="true" className="w-px h-10 bg-gradient-to-b from-white/45 to-transparent" />
       </div>
 
       {/* Slide indicators */}
-      <div className="absolute bottom-8 md:bottom-12 left-1/2 -translate-x-1/2 z-30 flex gap-3">
+      <div className="absolute bottom-8 md:bottom-10 left-1/2 -translate-x-1/2 z-30 flex gap-3">
         {SLIDES.map((slide, index) => (
           <button
             key={slide.slug}

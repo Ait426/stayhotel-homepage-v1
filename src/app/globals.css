@@ -22,11 +22,11 @@
   --accent-light: #deba7c;
   --accent-dark: #997426;
 
-  /* Fonts - Elegant Typography */
-  --font-heading: 'Playfair Display', 'Noto Serif KR', Georgia, serif;
-  --font-body: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-inter: 'Noto Sans KR', sans-serif;
-  --font-playfair: 'Playfair Display', serif;
+  /* Fonts — the actual families come from next/font in layout.tsx, which sets
+     --font-playfair / --font-serif-kr / --font-sans-kr on <html>. Only compose
+     them here; never re-declare a family name, or the loaded font is bypassed. */
+  --font-heading: var(--font-playfair), var(--font-serif-kr), Georgia, serif;
+  --font-body: var(--font-sans-kr), -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Spacing */
   --header-height: 80px;
@@ -390,7 +390,7 @@ a:hover {
 /* Shared base styles */
 .date-picker-dark .rdp-root,
 .date-picker-light .rdp-root {
-  font-family: 'Noto Sans KR', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.95rem;
   padding: 1.25rem;
   border-radius: 2px;

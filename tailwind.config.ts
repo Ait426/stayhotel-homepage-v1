@@ -68,10 +68,13 @@ const config: Config = {
       },
       // Typography - Elegant Premium
       fontFamily: {
-        heading: ['Cormorant Garamond', 'Playfair Display', 'Georgia', 'serif'],
-        body: ['Noto Sans KR', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        sans: ['Noto Sans KR', 'system-ui', 'sans-serif'],
-        serif: ['Cormorant Garamond', 'Playfair Display', 'Georgia', 'serif'],
+        // Latin runs through Playfair; Hangul falls to Noto Serif KR, which is
+        // actually loaded. Previously every serif in this stack lacked Hangul,
+        // so Korean headings dropped to an arbitrary system face.
+        heading: ['var(--font-playfair)', 'var(--font-serif-kr)', 'Georgia', 'serif'],
+        serif: ['var(--font-playfair)', 'var(--font-serif-kr)', 'Georgia', 'serif'],
+        body: ['var(--font-sans-kr)', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        sans: ['var(--font-sans-kr)', 'system-ui', 'sans-serif'],
       },
       // Font sizes with appropriate line heights
       fontSize: {

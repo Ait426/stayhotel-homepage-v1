@@ -169,7 +169,6 @@ export default function Navigation({ locale }: NavigationProps) {
               <Link
                 href={`/${locale}`}
                 className={`text-xl md:text-2xl lg:text-3xl font-medium tracking-widest transition-colors duration-300 ${logoColor}`}
-                style={{ fontFamily: "'Noto Sans KR', sans-serif" }}
               >
                 {brandName}
               </Link>

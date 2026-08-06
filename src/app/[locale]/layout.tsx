@@ -12,7 +12,7 @@ export const runtime = 'edge';
  */
 
 import { notFound } from 'next/navigation';
-import { Playfair_Display, Inter } from 'next/font/google';
+import { Playfair_Display, Noto_Serif_KR, Noto_Sans_KR } from 'next/font/google';
 import { Locale } from '@/types';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
@@ -27,17 +27,37 @@ const locales = ['ko', 'en', 'ja', 'zh'] as const;
 // Enable static generation with revalidation
 export const revalidate = 3600; // revalidate every hour
 
-// Load fonts
+/**
+ * Fonts.
+ *
+ * Playfair/Cormorant carry no Hangul, so Korean headings were falling through
+ * to whatever serif the OS picked — which is why the hero title rendered as a
+ * blocky system face instead of a display serif. Noto Serif/Sans KR are loaded
+ * alongside and listed first for Korean; Playfair still handles Latin.
+ */
 const playfair = Playfair_Display({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-playfair',
 });
 
-const inter = Inter({
-  subsets: ['latin'],
+const notoSerifKr = Noto_Serif_KR({
+  weight: ['400', '500'],
   display: 'swap',
-  variable: '--font-inter',
+  // `subsets` is omitted on purpose: next/font has no `korean` subset for CJK
+  // families, and naming only `latin` ships a file with no Hangul at all —
+  // which is what silently reverted Korean headings to a system sans.
+  // Omitting it pulls every unicode-range; `preload: false` keeps the (large)
+  // Hangul ranges off the critical path.
+  preload: false,
+  variable: '--font-serif-kr',
+});
+
+const notoSansKr = Noto_Sans_KR({
+  weight: ['300', '400', '500', '700'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-sans-kr',
 });
 
 // Generate metadata based on locale
@@ -95,7 +115,7 @@ export default async function LocaleLayout({
   const messages = getMessages(locale);
 
   return (
-    <html lang={locale} className={`${playfair.variable} ${inter.variable}`}>
+    <html lang={locale} className={`${playfair.variable} ${notoSerifKr.variable} ${notoSansKr.variable}`}>
       <body className="font-body antialiased bg-white text-neutral-900">
         <TranslationProvider locale={locale} messages={messages}>
           {/* Skip to content link for accessibility */}
