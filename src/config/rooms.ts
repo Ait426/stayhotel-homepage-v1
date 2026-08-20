@@ -123,9 +123,9 @@ export const rooms: Room[] = [
     nameKo: '패밀리 트윈',
     nameEn: 'Family Twin',
     descriptionKo:
-      '가족 여행에 최적화된 트윈 베드 객실입니다. 두 개의 더블 베드가 제공되어 기준 2인, 최대 3인까지 투숙할 수 있습니다. 넓은 공간과 가족 친화적 편의시설을 갖추고 있습니다.',
+      '가족 여행에 적합한 트윈 베드 객실입니다. 더블 베드 2개가 제공되어 기준 2인, 최대 3인까지 투숙하실 수 있습니다. 가족 단위 투숙에 필요한 편의시설을 갖추고 있습니다.',
     descriptionEn:
-      'Optimized for family travel with twin bed configuration. Features two double beds accommodating up to 3 guests (base 2). Spacious layout with family-friendly amenities.',
+      'A twin-bed room suited to family travel. Two double beds accommodate up to 3 guests (base 2), with the amenities needed for a family stay.',
     pricePerNight: 90000,
     fridayPrice: 100000,
     saturdayPrice: 115000,
@@ -154,9 +154,9 @@ export const rooms: Room[] = [
     nameKo: '패밀리 트리플',
     nameEn: 'Family Triple',
     descriptionKo:
-      '대가족을 위한 넓은 객실입니다. 더블 베드 1개와 싱글 베드 2개가 제공되어 기준 3인, 최대 4인까지 투숙 가능합니다. 독립된 드레스룸과 넓은 욕실이 특징입니다.',
+      '가족 단위 투숙에 적합한 객실입니다. 더블 베드 1개와 싱글 베드 2개가 제공되어 기준 3인, 최대 4인까지 투숙 가능합니다.',
     descriptionEn:
-      'A spacious room designed for larger families. Features one double bed and two single beds, accommodating up to 4 guests (base 3). Includes a separate dressing area and large bathroom.',
+      'A room suited to family stays. One double bed and two single beds accommodate up to 4 guests (base 3).',
     pricePerNight: 120000,
     fridayPrice: 135000,
     saturdayPrice: 150000,
