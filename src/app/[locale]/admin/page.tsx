@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useEffect, Fragment } from 'react';
+import { getRoomById } from '@/config/rooms';
 
 interface PricingSnapshot {
   baseAmount: number;
@@ -89,55 +90,26 @@ function aggregateChart(data: { time: string; requests: number }[], period: stri
   }));
 }
 
-const ROOM_LABELS: Record<string, string> = {
-  standard: '스탠다드',
-  'standard-premium': '스탠다드 프리미엄',
-  deluxe: '디럭스',
-  'family-twin': '패밀리 트윈',
-  'family-triple': '패밀리 트리플',
-  'royal-suite': '로얄 스위트',
-  'party-suite': '파티 스위트',
-};
-
-// Base prices (Sun–Thu) for fallback when finalAmount is missing (legacy data)
-const ROOM_BASE_PRICES: Record<string, number> = {
-  standard: 70000,
-  'standard-premium': 80000,
-  deluxe: 90000,
-  'family-twin': 90000,
-  'family-triple': 120000,
-  'royal-suite': 140000,
-  'party-suite': 170000,
-};
-
-// 객실별 기준 인원 (초과 시 추가요금 발생)
-const ROOM_BASE_GUESTS: Record<string, number> = {
-  standard: 2,
-  'standard-premium': 2,
-  deluxe: 2,
-  'family-twin': 2,
-  'family-triple': 3,
-  'royal-suite': 2,
-  'party-suite': 4,
-};
-
-const EXTRA_GUEST_FEE = 10000; // ₩10,000/인/박
-
 /**
- * 추가 인원 정보 — snapshot 우선, 없으면 재계산 fallback
+ * 추가 인원 정보 — snapshot 우선, 없으면 config/rooms.ts 기준으로 재계산
+ *
+ * 객실명·기준가·기준인원·추가요금 단가는 전부 config/rooms.ts가 단일 출처다.
+ * 여기에 값을 복제해두면 요금을 바꿀 때 admin만 옛 숫자를 보여주게 된다 (2026-08-20 수정).
  */
 function getExtraGuestInfo(b: BookingRecord): { extraCount: number; fee: number; unit: number; nights: number } | null {
   // snapshot이 있으면 snapshot에서 직접 읽기
   if (b.pricing && b.pricing.extraGuestCount > 0) {
     return { extraCount: b.pricing.extraGuestCount, fee: b.pricing.extraGuestFeeTotal, unit: b.pricing.extraGuestFeeUnit, nights: b.pricing.nights };
   }
-  // fallback: 상수에서 재계산
-  const baseGuests = ROOM_BASE_GUESTS[b.formData.roomId];
-  if (baseGuests == null) return null;
+  // fallback: 객실 설정에서 재계산
+  const room = getRoomById(b.formData.roomId);
+  if (!room) return null;
+  const baseGuests = room.baseGuests ?? room.maxGuests;
   const extraCount = Math.max(0, b.formData.guestCount - baseGuests);
   if (extraCount === 0) return null;
+  const unit = room.extraGuestFee || 0;
   const nights = calculateNights(b.formData.checkIn, b.formData.checkOut);
-  return { extraCount, fee: extraCount * EXTRA_GUEST_FEE * nights, unit: EXTRA_GUEST_FEE, nights };
+  return { extraCount, fee: extraCount * unit * nights, unit, nights };
 }
 
 function formatDateTime(iso: string): string {
@@ -172,8 +144,8 @@ function formatDisplayPrice(b: BookingRecord): { text: string; isFallback: boole
   if (b.finalAmount != null && b.finalAmount > 0) {
     return { text: `${b.finalAmount.toLocaleString()}원`, isFallback: false };
   }
-  // Fallback for legacy data: estimate from base price
-  const basePrice = ROOM_BASE_PRICES[b.formData.roomId];
+  // Fallback for legacy data: estimate from base price (평일 기준가)
+  const basePrice = getRoomById(b.formData.roomId)?.pricePerNight;
   if (basePrice) {
     const nights = calculateNights(b.formData.checkIn, b.formData.checkOut);
     return { text: `${(basePrice * nights).toLocaleString()}원`, isFallback: true };
@@ -531,7 +503,7 @@ export default function AdminPage() {
                       <td className="px-3 py-2 whitespace-nowrap text-slate-500">{formatDateTime(b.createdAt)}</td>
                       <td className="px-3 py-2 font-medium whitespace-nowrap text-slate-900">{b.formData.guestName}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-slate-600">{b.formData.checkIn} ~ {b.formData.checkOut}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-slate-700">{ROOM_LABELS[b.formData.roomId] || b.formData.roomId}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-700">{getRoomById(b.formData.roomId)?.nameKo || b.formData.roomId}</td>
                       <td className="px-3 py-2 text-center whitespace-nowrap text-slate-600">{b.formData.guestCount}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-right">
                         {(() => {

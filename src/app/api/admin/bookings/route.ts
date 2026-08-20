@@ -6,6 +6,10 @@
  * - Lists all booking records from Cloudflare KV
  * - Falls back to in-memory store in local dev
  * - Returns bookings sorted by creation date (newest first)
+ *
+ * 조회는 booking-store의 listAllBookings()에 위임한다.
+ * 여기서 스토어 폴백을 다시 구현하면 booking-store와 다른 Map을 보게 되어
+ * 로컬 개발에서 목록이 항상 비어 보인다 (2026-08-20 수정).
  */
 
 export const runtime = 'edge';
@@ -13,6 +17,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestContext } from '@cloudflare/next-on-pages';
+import { listAllBookings } from '@/lib/booking-store';
 
 function getAdminPassword(): string {
   // Cloudflare Pages: env vars via getRequestContext().env
@@ -28,44 +33,6 @@ function getAdminPassword(): string {
   return process.env.ADMIN_PASSWORD || '';
 }
 
-interface KVLike {
-  get(key: string): Promise<string | null>;
-  list(options?: { prefix?: string }): Promise<{ keys: { name: string }[] }>;
-}
-
-// Mirror of the in-memory fallback from booking-store.ts
-const memoryStore = (() => {
-  // Access the same module-level Map used by booking-store
-  // We re-import the pattern so list() works for local dev
-  const store = new Map<string, string>();
-  return {
-    _map: store,
-    async get(key: string) { return store.get(key) ?? null; },
-    async list(options?: { prefix?: string }) {
-      const keys: { name: string }[] = [];
-      for (const k of Array.from(store.keys())) {
-        if (!options?.prefix || k.startsWith(options.prefix)) {
-          keys.push({ name: k });
-        }
-      }
-      return { keys };
-    },
-  } satisfies KVLike & { _map: Map<string, string> };
-})();
-
-function getStore(): KVLike {
-  try {
-    const ctx = getRequestContext();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const env = ctx.env as any;
-    const kv = env.BOOKING_KV as KVLike | undefined;
-    if (kv) return kv;
-  } catch {
-    // local dev — fall through
-  }
-  return memoryStore;
-}
-
 export async function GET(request: NextRequest) {
   // --- Auth gate (server-side, env var) ---
   const key = request.headers.get('X-Admin-Key');
@@ -78,24 +45,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const kv = getStore();
-    const listed = await kv.list({ prefix: 'booking:' });
-
-    // Fetch all booking values
-    const bookings = await Promise.all(
-      listed.keys.map(async ({ name }) => {
-        const raw = await kv.get(name);
-        if (!raw) return null;
-        try { return JSON.parse(raw); } catch { return null; }
-      })
-    );
-
-    // Filter nulls, sort newest first
-    const sorted = bookings
-      .filter(Boolean)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    return NextResponse.json({ success: true, bookings: sorted });
+    const bookings = await listAllBookings();
+    return NextResponse.json({ success: true, bookings });
   } catch (error) {
     console.error('[admin/bookings] Error:', error);
     return NextResponse.json(

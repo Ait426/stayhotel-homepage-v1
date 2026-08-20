@@ -1,17 +1,11 @@
 import { MetadataRoute } from 'next';
+import { rooms } from '@/config/rooms';
 
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://pyeongtaekstay.com';
 const locales = ['ko', 'en', 'ja', 'zh'];
 
-const roomSlugs = [
-  'standard',
-  'standard-premium',
-  'deluxe',
-  'family-twin',
-  'family-triple',
-  'royal-suite',
-  'party-suite',
-];
+// 객실 목록은 config/rooms.ts가 단일 출처 — 객실을 추가/삭제해도 sitemap이 자동 반영된다
+const roomSlugs = rooms.map((room) => room.slug);
 
 const staticPages = [
   '',
@@ -20,6 +14,7 @@ const staticPages = [
   '/location',
   '/events',
   '/booking',
+  '/blog',
   '/privacy',
   '/terms',
 ];

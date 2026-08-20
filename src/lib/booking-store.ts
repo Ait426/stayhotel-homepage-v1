@@ -8,7 +8,7 @@
  * 1. Create KV namespace "stayhotel-bookings" in Cloudflare dashboard
  * 2. Bind it as "BOOKING_KV" in Pages → Settings → Functions → KV namespace bindings
  *
- * Bookings expire after 30 days (KV TTL).
+ * 보관 정책: 무기한 (put에 expirationTtl을 주지 않는다) — 아래 DATA RETENTION POLICY 참고
  */
 
 import { getRequestContext } from '@cloudflare/next-on-pages';
@@ -49,13 +49,23 @@ export interface StoredBooking {
 interface KVLike {
   get(key: string): Promise<string | null>;
   put(key: string, value: string): Promise<void>;
+  list(options?: { prefix?: string }): Promise<{ keys: { name: string }[] }>;
 }
 
 // In-memory fallback for local development (next dev)
+// ⚠️ 이 Map은 이 모듈 하나만 소유한다. 다른 파일에서 같은 폴백을 재구현하면
+//    서로 다른 Map을 보게 되어 로컬에서 조회가 항상 비어 보인다.
 const memoryStore = new Map<string, string>();
 const memoryFallback: KVLike = {
   async get(key: string) { return memoryStore.get(key) ?? null; },
   async put(key: string, value: string) { memoryStore.set(key, value); },
+  async list(options?: { prefix?: string }) {
+    const prefix = options?.prefix;
+    const keys = Array.from(memoryStore.keys())
+      .filter((k) => !prefix || k.startsWith(prefix))
+      .map((name) => ({ name }));
+    return { keys };
+  },
 };
 
 // DATA RETENTION POLICY: Indefinite (Updated 2026-03-09)
@@ -113,6 +123,39 @@ export async function saveBooking(formData: BookingFormData, bookingId: string, 
   }
 
   return booking;
+}
+
+/**
+ * 전체 예약 목록 조회 (최신순) — admin 대시보드용
+ *
+ * 저장/조회와 같은 스토어를 쓰므로 로컬 In-Memory 폴백에서도 방금 저장한 예약이 보인다.
+ */
+export async function listAllBookings(): Promise<StoredBooking[]> {
+  const kv = getStore();
+  const listed = await kv.list({ prefix: 'booking:' });
+
+  console.log(`[BookingStore] LIST prefix="booking:" | ${listed.keys.length}건`);
+
+  const raws = await Promise.all(listed.keys.map(({ name }) => kv.get(name)));
+
+  const bookings: StoredBooking[] = [];
+  raws.forEach((raw, i) => {
+    if (!raw) {
+      console.warn(`[BookingStore] LIST: key="${listed.keys[i].name}" 값이 비어 있어 건너뜀`);
+      return;
+    }
+    try {
+      bookings.push(JSON.parse(raw) as StoredBooking);
+    } catch (e) {
+      console.error(
+        `[BookingStore] LIST: key="${listed.keys[i].name}" JSON 파싱 실패 — ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  });
+
+  // 최신순 정렬
+  bookings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return bookings;
 }
 
 /**
