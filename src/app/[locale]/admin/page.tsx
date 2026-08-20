@@ -50,6 +50,17 @@ interface BookingRecord {
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'cancelled';
 type AnalyticsPeriod = '24h' | '7d' | '30d';
 
+/** 정렬 기준 — 예약이 언제 접수됐는지 / 손님이 언제 들어오는지 */
+type SortKey = 'createdAt' | 'checkIn';
+type SortDir = 'asc' | 'desc';
+
+/** 날짜 문자열을 정렬용 숫자로. 값이 비었거나 깨졌으면 0으로 밀어낸다. */
+function toTime(value: string | undefined): number {
+  if (!value) return 0;
+  const t = new Date(value).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
 interface AnalyticsData {
   kpi: { requests: number; pageViews: number; bytes: number; uniques: number };
   chart: { time: string; requests: number }[];
@@ -180,6 +191,9 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  // 기본은 최근 접수 순 — 서버가 내려주는 순서와 동일
+  const [sortKey, setSortKey] = useState<SortKey>('createdAt');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [cancellingToken, setCancellingToken] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -301,9 +315,28 @@ export default function AdminPage() {
     });
   })();
 
-  const filteredBookings = statusFilter === 'all'
+  const statusFiltered = statusFilter === 'all'
     ? searchedBookings
     : searchedBookings.filter(b => b.status === statusFilter);
+
+  // 정렬 — 같은 날짜가 많으므로(체크인 기준이면 특히) 접수 최신순을 2차 기준으로 둔다
+  const filteredBookings = [...statusFiltered].sort((a, b) => {
+    const av = sortKey === 'createdAt' ? toTime(a.createdAt) : toTime(a.formData.checkIn);
+    const bv = sortKey === 'createdAt' ? toTime(b.createdAt) : toTime(b.formData.checkIn);
+    if (av !== bv) return sortDir === 'asc' ? av - bv : bv - av;
+    return toTime(b.createdAt) - toTime(a.createdAt);
+  });
+
+  /** 같은 컬럼을 다시 누르면 방향만 뒤집는다 */
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    // 접수일은 최신부터, 체크인은 임박한 순서부터 보는 게 자연스럽다
+    setSortDir(key === 'createdAt' ? 'desc' : 'asc');
+  };
 
   const statusCounts = {
     all: searchedBookings.length,
@@ -573,9 +606,27 @@ export default function AdminPage() {
               <tr className="bg-slate-800 text-white text-left">
                 <th className="px-3 py-2.5 font-medium whitespace-nowrap">상태</th>
                 <th className="px-3 py-2.5 font-medium whitespace-nowrap">예약번호</th>
-                <th className="px-3 py-2.5 font-medium whitespace-nowrap">예약일시</th>
+                <th className="font-medium whitespace-nowrap p-0">
+                  <button
+                    onClick={() => handleSort('createdAt')}
+                    aria-label={`예약일시 기준 정렬 (현재 ${sortKey === 'createdAt' ? (sortDir === 'asc' ? '오름차순' : '내림차순') : '미적용'})`}
+                    className={`w-full px-3 py-2.5 flex items-center gap-1 hover:bg-slate-700 transition-colors ${sortKey === 'createdAt' ? 'text-white' : 'text-slate-300'}`}
+                  >
+                    예약일시
+                    <span className="text-[9px] leading-none">{sortKey === 'createdAt' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                  </button>
+                </th>
                 <th className="px-3 py-2.5 font-medium whitespace-nowrap">고객명</th>
-                <th className="px-3 py-2.5 font-medium whitespace-nowrap">체크인/아웃</th>
+                <th className="font-medium whitespace-nowrap p-0">
+                  <button
+                    onClick={() => handleSort('checkIn')}
+                    aria-label={`체크인 기준 정렬 (현재 ${sortKey === 'checkIn' ? (sortDir === 'asc' ? '오름차순' : '내림차순') : '미적용'})`}
+                    className={`w-full px-3 py-2.5 flex items-center gap-1 hover:bg-slate-700 transition-colors ${sortKey === 'checkIn' ? 'text-white' : 'text-slate-300'}`}
+                  >
+                    체크인/아웃
+                    <span className="text-[9px] leading-none">{sortKey === 'checkIn' ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                  </button>
+                </th>
                 <th className="px-3 py-2.5 font-medium whitespace-nowrap">룸 타입</th>
                 <th className="px-3 py-2.5 font-medium whitespace-nowrap text-center">인원</th>
                 <th className="px-3 py-2.5 font-medium whitespace-nowrap text-right">추가요금</th>
