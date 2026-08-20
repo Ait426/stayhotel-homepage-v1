@@ -54,6 +54,22 @@ interface AnalyticsData {
   kpi: { requests: number; pageViews: number; bytes: number; uniques: number };
   chart: { time: string; requests: number }[];
   topUrls: { path: string; count: number }[];
+  topUrlsError?: string | null;
+}
+
+/** 통계 API가 알려주는 상태 — 'not_configured'면 오류가 아니라 설정이 필요한 것 */
+interface AnalyticsFailure {
+  code?: string;
+  missing?: string[];
+  message: string;
+}
+
+/**
+ * 검색어 정규화 — 대소문자와 하이픈·공백 차이를 무시한다.
+ * 전화번호를 '01012345678'로 쳐도 '010-1234-5678'이 걸리게 하려는 것.
+ */
+function normalizeForSearch(value: string): string {
+  return value.toLowerCase().replace(/[\s-]/g, '');
 }
 
 function formatNum(n: number): string {
@@ -163,6 +179,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [cancellingToken, setCancellingToken] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -170,7 +187,7 @@ export default function AdminPage() {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('24h');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [analyticsError, setAnalyticsError] = useState('');
+  const [analyticsError, setAnalyticsError] = useState<AnalyticsFailure | null>(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   const fetchBookings = useCallback(async (pw: string) => {
@@ -197,20 +214,24 @@ export default function AdminPage() {
 
   const fetchAnalytics = useCallback(async (pw: string, period: AnalyticsPeriod) => {
     setAnalyticsLoading(true);
-    setAnalyticsError('');
+    setAnalyticsError(null);
     try {
       const res = await fetch(`/api/admin/cloudflare-analytics?period=${period}`, {
         headers: { 'X-Admin-Key': pw },
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setAnalyticsError(data.error || '통계 로드 실패');
+        setAnalyticsError({
+          code: data.code,
+          missing: data.missing,
+          message: data.error || '통계 로드 실패',
+        });
         setAnalyticsData(null);
         return;
       }
-      setAnalyticsData({ kpi: data.kpi, chart: data.chart, topUrls: data.topUrls });
+      setAnalyticsData({ kpi: data.kpi, chart: data.chart, topUrls: data.topUrls, topUrlsError: data.topUrlsError });
     } catch {
-      setAnalyticsError('통계 서버 연결 실패');
+      setAnalyticsError({ message: '통계 서버 연결 실패' });
       setAnalyticsData(null);
     } finally {
       setAnalyticsLoading(false);
@@ -264,16 +285,34 @@ export default function AdminPage() {
     }
   };
 
+  // 검색 → 상태 필터 순으로 좁힌다.
+  // 상태 탭의 건수는 '검색 결과 안에서의 건수'라야 표에 보이는 숫자와 어긋나지 않는다.
+  const searchedBookings = (() => {
+    const q = normalizeForSearch(searchQuery.trim());
+    if (!q) return bookings;
+    return bookings.filter(b => {
+      const haystack = [
+        b.formData.guestName,
+        b.formData.guestEmail,
+        b.formData.guestPhone,
+        b.bookingId,
+      ].map(normalizeForSearch);
+      return haystack.some(field => field.includes(q));
+    });
+  })();
+
   const filteredBookings = statusFilter === 'all'
-    ? bookings
-    : bookings.filter(b => b.status === statusFilter);
+    ? searchedBookings
+    : searchedBookings.filter(b => b.status === statusFilter);
 
   const statusCounts = {
-    all: bookings.length,
-    pending: bookings.filter(b => b.status === 'pending').length,
-    confirmed: bookings.filter(b => b.status === 'confirmed').length,
-    cancelled: bookings.filter(b => b.status === 'cancelled').length,
+    all: searchedBookings.length,
+    pending: searchedBookings.filter(b => b.status === 'pending').length,
+    confirmed: searchedBookings.filter(b => b.status === 'confirmed').length,
+    cancelled: searchedBookings.filter(b => b.status === 'cancelled').length,
   };
+
+  const isSearching = searchQuery.trim().length > 0;
 
   // --- Login Gate ---
   if (!authenticated) {
@@ -368,7 +407,30 @@ export default function AdminPage() {
         {analyticsOpen && (
           <div className="px-6 pb-5 border-t border-slate-100">
             {analyticsError ? (
-              <p className="text-xs text-slate-400 py-4 text-center">{analyticsError}</p>
+              analyticsError.code === 'not_configured' ? (
+                /* 오류가 아니라 '설정이 안 된 상태' — 무엇을 어디에 넣어야 하는지까지 알려준다 */
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-2">
+                  <p className="font-semibold">Cloudflare 통계가 아직 연결되지 않았습니다</p>
+                  <p className="leading-relaxed">
+                    Cloudflare Pages → 프로젝트 → <span className="font-medium">Settings → Environment variables</span> 에
+                    아래 값을 추가하고 재배포하면 이 자리에 통계가 표시됩니다.
+                  </p>
+                  <ul className="space-y-1 pt-1">
+                    {(analyticsError.missing || []).map(key => (
+                      <li key={key} className="font-mono text-[11px] bg-white/70 border border-amber-200 rounded px-2 py-1">
+                        {key}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="leading-relaxed pt-1 text-amber-800">
+                    <span className="font-mono">CLOUDFLARE_ZONE_ID</span> — 도메인 대시보드 개요 우측의 Zone ID<br />
+                    <span className="font-mono">CLOUDFLARE_API_TOKEN</span> — My Profile → API Tokens에서{' '}
+                    <span className="font-medium">Zone · Analytics · Read</span> 권한으로 발급
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-red-600 py-4 text-center">{analyticsError.message}</p>
+              )
             ) : !analyticsData ? (
               <p className="text-xs text-slate-400 py-4 text-center animate-pulse">통계 로딩 중...</p>
             ) : (
@@ -414,7 +476,12 @@ export default function AdminPage() {
                   );
                 })()}
 
-                {/* Top URLs */}
+                {/* Top URLs — 요금제에 따라 제공되지 않을 수 있어 사유를 남긴다 */}
+                {analyticsData.topUrls.length === 0 && analyticsData.topUrlsError && (
+                  <p className="mt-4 text-[11px] text-slate-400">
+                    Top URLs는 현재 요금제/토큰 권한으로 조회할 수 없습니다 (KPI와 추이는 정상)
+                  </p>
+                )}
                 {analyticsData.topUrls.length > 0 && (
                   <div className="mt-4">
                     <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Top URLs</div>
@@ -431,6 +498,37 @@ export default function AdminPage() {
               </>
             )}
           </div>
+        )}
+      </div>
+
+      {/* 검색 — 고객명/이메일/전화/예약번호 */}
+      <div className="bg-white border border-slate-200 shadow-sm rounded-xl px-6 py-3 mt-3">
+        <div className="relative">
+          <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+          </svg>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setExpandedId(null); }}
+            placeholder="고객명, 이메일, 전화번호, 예약번호로 검색"
+            aria-label="예약 검색"
+            className="w-full pl-9 pr-24 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+          />
+          {isSearching && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 text-[11px] font-medium text-slate-500 bg-slate-100 rounded hover:bg-slate-200 transition-colors"
+            >
+              지우기
+            </button>
+          )}
+        </div>
+        {isSearching && (
+          <p className="text-[11px] text-slate-500 mt-2">
+            전체 {bookings.length}건 중 <span className="font-semibold text-slate-700">{searchedBookings.length}건</span> 검색됨
+            {searchedBookings.length === 0 && ' — 이름 일부만 입력해도 찾을 수 있습니다'}
+          </p>
         )}
       </div>
 
@@ -463,7 +561,11 @@ export default function AdminPage() {
       <div className="mt-5 overflow-x-auto bg-white shadow-sm rounded-xl border border-slate-200">
         {filteredBookings.length === 0 ? (
           <div className="p-12 text-center text-slate-500 text-sm">
-            {statusFilter === 'all' ? '예약 내역이 없습니다.' : `${statusFilter === 'pending' ? '대기' : statusFilter === 'confirmed' ? '확정' : '취소'} 상태의 예약이 없습니다.`}
+            {isSearching
+              ? <>&lsquo;{searchQuery.trim()}&rsquo; 검색 결과가 없습니다.</>
+              : statusFilter === 'all'
+                ? '예약 내역이 없습니다.'
+                : `${statusFilter === 'pending' ? '대기' : statusFilter === 'confirmed' ? '확정' : '취소'} 상태의 예약이 없습니다.`}
           </div>
         ) : (
           <table className="w-full text-xs border-collapse min-w-[960px]">
