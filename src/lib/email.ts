@@ -24,6 +24,7 @@ import { BookingFormData } from '@/types';
 import { PricingSnapshot } from '@/lib/booking-store';
 import { getRoomById, getRoomName, formatPrice, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
 import { getBrandConfig } from '@/config/brand';
+import { escapeHtml, escapeHtmlMultiline } from '@/lib/utils';
 
 const RESERVATION_TYPE_LABELS: Record<string, Record<string, string>> = {
   general: { ko: '일반', en: 'General' },
@@ -107,7 +108,11 @@ function getBookingDetails(data: BookingFormData, finalAmount?: number) {
   const extraGuestFee = room ? calculateExtraGuestFee(room, data.guestCount, nights) : 0;
   // 서버에서 검증된 finalAmount 사용; 없으면 base + extra로 계산
   const totalPrice = finalAmount != null ? finalAmount : (basePrice + extraGuestFee);
-  const priceText = totalPrice > 0 ? formatPrice(totalPrice, 'ko') : '-';
+  // 미군 특가는 $64 고정 요금(USD)이므로 ₩로 표기하면 안 된다
+  const isMilitary = data.appliedPromo === 'military_fixed';
+  const priceText = totalPrice > 0
+    ? (isMilitary ? `$${totalPrice.toLocaleString()}` : formatPrice(totalPrice, 'ko'))
+    : '-';
   const basePriceText = basePrice > 0 ? formatPrice(basePrice, 'ko') : '-';
   const extraFeeText = extraGuestFee > 0 ? formatPrice(extraGuestFee, 'ko') : null;
   const typeLabel = RESERVATION_TYPE_LABELS[data.reservationType]?.ko || data.reservationType;
@@ -117,7 +122,7 @@ function getBookingDetails(data: BookingFormData, finalAmount?: number) {
   const appliedPromo = data.appliedPromo || null;
   const promoLabelKo = appliedPromo ? (PROMO_LABELS[appliedPromo]?.ko || appliedPromo) : null;
   const promoLabelEn = appliedPromo ? (PROMO_LABELS[appliedPromo]?.en || appliedPromo) : null;
-  return { room, roomName, roomNameEn, nights, basePrice, basePriceText, extraGuestCount, extraGuestFee, extraFeeText, totalPrice, priceText, typeLabel, typeLabelEn, transportLabel, transportLabelEn, appliedPromo, promoLabelKo, promoLabelEn };
+  return { room, roomName, roomNameEn, nights, basePrice, basePriceText, extraGuestCount, extraGuestFee, extraFeeText, totalPrice, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, appliedPromo, promoLabelKo, promoLabelEn };
 }
 
 /**
@@ -183,7 +188,7 @@ export async function sendBookingEmail(
           ${ROW('객실', `${roomName} (${roomNameEn})`)}
           ${ROW('체크인', data.checkIn)}
           ${ROW('체크아웃', `${data.checkOut} (${pricing.nights}박)`)}
-          ${ROW('인원', `${data.guestCount}명`)}
+          ${ROW('인원', `${escapeHtml(data.guestCount)}명`)}
           ${ROW('예약 유형', typeLabel)}
           ${ROW('방문 방법', transportLabel)}
         </table>
@@ -205,10 +210,10 @@ export async function sendBookingEmail(
           <tr><td style="font-family: ${FONT_STACK}; font-size: 16px; font-weight: 700; color: #1a1a2e; padding-bottom: 12px;">고객 정보</td></tr>
         </table>
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-family: ${FONT_STACK}; font-size: 14px;">
-          ${ROW('이름', data.guestName)}
-          <tr><td style="padding: 12px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">이메일</td><td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;"><a href="mailto:${data.guestEmail}" style="color: #1a1a2e; text-decoration: none;">${data.guestEmail}</a></td></tr>
-          <tr><td style="padding: 12px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">전화</td><td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;"><a href="tel:${data.guestPhone}" style="color: #1a1a2e; text-decoration: none;">${data.guestPhone}</a></td></tr>
-          ${data.specialRequests ? `<tr><td style="padding: 12px 0; color: #888888; vertical-align: top;">요청사항</td><td style="padding: 12px 0; color: #1a1a2e;">${data.specialRequests}</td></tr>` : ''}
+          ${ROW('이름', escapeHtml(data.guestName))}
+          <tr><td style="padding: 12px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">이메일</td><td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;"><a href="mailto:${escapeHtml(data.guestEmail)}" style="color: #1a1a2e; text-decoration: none;">${escapeHtml(data.guestEmail)}</a></td></tr>
+          <tr><td style="padding: 12px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">전화</td><td style="padding: 12px 0; border-bottom: 1px solid #f0f0f0;"><a href="tel:${escapeHtml(data.guestPhone)}" style="color: #1a1a2e; text-decoration: none;">${escapeHtml(data.guestPhone)}</a></td></tr>
+          ${data.specialRequests ? `<tr><td style="padding: 12px 0; color: #888888; vertical-align: top;">요청사항</td><td style="padding: 12px 0; color: #1a1a2e;">${escapeHtmlMultiline(data.specialRequests)}</td></tr>` : ''}
         </table>
         <!-- 확정 / 취소 버튼 -->
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 32px;">
@@ -233,7 +238,7 @@ export async function sendBookingEmail(
               <!--<![endif]-->
             </td>
           </tr>
-          <tr><td align="center" style="padding-top: 8px; font-family: ${FONT_STACK}; font-size: 12px; color: #aaaaaa;">확정 클릭 → 고객에게 확인 메일 발송 &nbsp;|&nbsp; 취소 클릭 → 고객에게 취소 메일 발송</td></tr>
+          <tr><td align="center" style="padding-top: 8px; font-family: ${FONT_STACK}; font-size: 12px; color: #aaaaaa;">버튼을 누르면 확인 화면이 열립니다 &nbsp;|&nbsp; 확인 화면에서 한 번 더 눌러야 실제로 처리됩니다</td></tr>
         </table>
       </td></tr>
     </table>
@@ -280,7 +285,7 @@ export async function sendConfirmationEmail(
   const hotelEmail = brand.contact.email;
   const hotelPhone = brand.contact.phone;
   const brandName = brand.name.ko;
-  const { roomName, roomNameEn, nights, basePriceText, extraGuestCount, extraGuestFee, extraFeeText, priceText, typeLabel, typeLabelEn, transportLabel, transportLabelEn, promoLabelKo, promoLabelEn } = getBookingDetails(data, finalAmount);
+  const { roomName, roomNameEn, nights, basePriceText, extraGuestCount, extraGuestFee, extraFeeText, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, promoLabelKo, promoLabelEn } = getBookingDetails(data, finalAmount);
   const fromEmail = process.env.EMAIL_FROM || 'noreply@pyeongtaekstay.com';
   const confirmedDate = new Date().toISOString().split('T')[0];
 
@@ -382,7 +387,7 @@ export async function sendConfirmationEmail(
           </tr>
           <tr>
             <td style="padding: 14px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">인원 / Guests</td>
-            <td style="padding: 14px 0; color: #1a1a2e; font-weight: 600; text-align: right; border-bottom: 1px solid #f0f0f0;">${data.guestCount}명</td>
+            <td style="padding: 14px 0; color: #1a1a2e; font-weight: 600; text-align: right; border-bottom: 1px solid #f0f0f0;">${escapeHtml(data.guestCount)}명</td>
           </tr>
           <tr>
             <td style="padding: 14px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">예약유형 / Type</td>
@@ -404,9 +409,9 @@ export async function sendConfirmationEmail(
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
               <tr>
                 <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #888888; padding-bottom: 6px;">객실 요금 / Room Rate</td>
-                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #1a1a2e; padding-bottom: 6px;">${basePriceText} (${nights}박/${nights} night${nights > 1 ? 's' : ''})</td>
+                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #1a1a2e; padding-bottom: 6px;">${isMilitary ? '$64/박 고정' : basePriceText} (${nights}박/${nights} night${nights > 1 ? 's' : ''})</td>
               </tr>
-              ${extraGuestFee > 0 ? `<tr>
+              ${!isMilitary && extraGuestFee > 0 ? `<tr>
                 <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #e65100; padding-bottom: 6px;">추가 인원 / Extra Guests</td>
                 <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #e65100; padding-bottom: 6px;">+${extraFeeText} (${extraGuestCount}명 × ${nights}박 × ₩10,000)</td>
               </tr>` : ''}
@@ -434,19 +439,19 @@ export async function sendConfirmationEmail(
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="font-family: ${FONT_STACK}; font-size: 14px;">
           <tr>
             <td style="padding: 14px 0; color: #888888; width: 45%; border-bottom: 1px solid #f0f0f0;">성명 / Name</td>
-            <td style="padding: 14px 0; color: #1a1a2e; font-weight: 600; text-align: right; border-bottom: 1px solid #f0f0f0;">${data.guestName}</td>
+            <td style="padding: 14px 0; color: #1a1a2e; font-weight: 600; text-align: right; border-bottom: 1px solid #f0f0f0;">${escapeHtml(data.guestName)}</td>
           </tr>
           <tr>
             <td style="padding: 14px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">연락처 / Phone</td>
-            <td style="padding: 14px 0; color: #1a1a2e; text-align: right; border-bottom: 1px solid #f0f0f0;">${data.guestPhone}</td>
+            <td style="padding: 14px 0; color: #1a1a2e; text-align: right; border-bottom: 1px solid #f0f0f0;">${escapeHtml(data.guestPhone)}</td>
           </tr>
           <tr>
             <td style="padding: 14px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">이메일 / Email</td>
-            <td style="padding: 14px 0; color: #1a1a2e; text-align: right; border-bottom: 1px solid #f0f0f0;">${data.guestEmail}</td>
+            <td style="padding: 14px 0; color: #1a1a2e; text-align: right; border-bottom: 1px solid #f0f0f0;">${escapeHtml(data.guestEmail)}</td>
           </tr>
           ${data.specialRequests ? `<tr>
             <td style="padding: 14px 0; color: #888888; vertical-align: top;">요청사항 / Requests</td>
-            <td style="padding: 14px 0; color: #1a1a2e; text-align: right;">${data.specialRequests}</td>
+            <td style="padding: 14px 0; color: #1a1a2e; text-align: right;">${escapeHtmlMultiline(data.specialRequests)}</td>
           </tr>` : ''}
         </table>
       </td></tr>
@@ -607,7 +612,7 @@ export async function sendCancellationEmail(
           </tr>
           <tr>
             <td style="padding: 14px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">인원 / Guests</td>
-            <td style="padding: 14px 0; color: #1a1a2e; font-weight: 600; text-align: right; border-bottom: 1px solid #f0f0f0;">${data.guestCount}명</td>
+            <td style="padding: 14px 0; color: #1a1a2e; font-weight: 600; text-align: right; border-bottom: 1px solid #f0f0f0;">${escapeHtml(data.guestCount)}명</td>
           </tr>
           <tr>
             <td style="padding: 14px 0; color: #888888; border-bottom: 1px solid #f0f0f0;">금액 / Amount</td>

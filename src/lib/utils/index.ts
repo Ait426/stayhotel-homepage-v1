@@ -215,3 +215,28 @@ export function safeJsonParse<T>(json: string, fallback: T): T {
     return fallback;
   }
 }
+
+/**
+ * HTML 이스케이프
+ *
+ * 사용자 입력(고객명, 요청사항 등)을 HTML 문자열 템플릿에 넣기 전 반드시 통과시킨다.
+ * 이메일 본문과 API 라우트가 반환하는 HTML 페이지는 React가 아니라 문자열 보간으로
+ * 만들어지므로 자동 이스케이프가 없다. 속성값 안에 들어가는 경우까지 고려해
+ * 따옴표도 함께 변환한다.
+ */
+export function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * 여러 줄 사용자 입력용 HTML 이스케이프 (줄바꿈을 <br>로 보존)
+ */
+export function escapeHtmlMultiline(value: unknown): string {
+  return escapeHtml(value).replace(/\r?\n/g, '<br>');
+}
