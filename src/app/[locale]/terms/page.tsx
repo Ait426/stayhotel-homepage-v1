@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: PageProps) {
 const content: Record<string, { title: string; lastUpdated: string; sections: { heading: string; body: string[] }[] }> = {
   ko: {
     title: '이용약관',
-    lastUpdated: '2026년 2월 9일',
+    lastUpdated: '2026년 8월 21일',
     sections: [
       {
         heading: '제1조 (목적)',
@@ -95,7 +95,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
   },
   en: {
     title: 'Terms of Service',
-    lastUpdated: 'February 9, 2026',
+    lastUpdated: 'August 21, 2026',
     sections: [
       {
         heading: 'Article 1. Purpose',
@@ -169,7 +169,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
   },
   ja: {
     title: '利用規約',
-    lastUpdated: '2026年2月9日',
+    lastUpdated: '2026年8月21日',
     sections: [
       {
         heading: '第1条（目的）',
@@ -243,7 +243,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
   },
   zh: {
     title: '使用条款',
-    lastUpdated: '2026年2月9日',
+    lastUpdated: '2026年8月21日',
     sections: [
       {
         heading: '第一条 目的',

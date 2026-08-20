@@ -89,45 +89,45 @@ export const onlineBookingCancellationPolicy: Record<Locale, CancellationPolicy>
 
 /**
  * 이용약관 제4조 원문 — 약관 페이지가 사용
+ *
+ * 2026-08-21 개정: 홈페이지 예약 취소(24시간 기준)와 투숙 중 환불(3일 기준)이
+ * 하나의 조항에 뭉뚱그려져 있어 서로 다른 기준이 구분되지 않던 문제를 정리했다.
+ * 개정 시 약관 페이지의 lastUpdated도 함께 갱신할 것.
  */
 export const termsCancellationArticle: Record<Locale, { heading: string; body: string[] }> = {
   ko: {
     heading: '제4조 (예약 변경 및 취소)',
     body: [
-      '예약 변경 및 취소는 체크인 3일 전까지 무료로 가능합니다.',
-      '체크인 2일 전: 객실 요금의 50% 취소 수수료',
-      '체크인 1일 전 또는 당일: 객실 요금의 100% 취소 수수료',
-      '노쇼(No-show): 객실 요금의 100% 부과',
+      '본 홈페이지를 통한 예약은 체크인 24시간 전까지 무료로 변경·취소할 수 있습니다.',
+      '체크인 24시간 이내의 취소 및 노쇼(No-show)는 취소 수수료가 부과됩니다.',
+      '투숙 중 환불은 체크인 3일 전 기준으로 산정하며, 체크인 2일 전 50%, 1일 전 또는 당일 100%의 수수료가 부과됩니다.',
       '특별 프로모션 또는 패키지 상품은 별도의 취소 정책이 적용될 수 있습니다.',
     ],
   },
   en: {
     heading: 'Article 4. Modification and Cancellation',
     body: [
-      'Free modification or cancellation is available up to 3 days before check-in.',
-      '2 days before check-in: 50% cancellation fee',
-      '1 day before or on the day of check-in: 100% cancellation fee',
-      'No-show: 100% of room charge',
+      'Bookings made through this website may be modified or cancelled free of charge up to 24 hours before check-in.',
+      'Cancellations within 24 hours of check-in and no-shows are subject to a cancellation fee.',
+      'Refunds during a stay are calculated on the basis of 3 days before check-in: a 50% fee applies 2 days before check-in, and a 100% fee applies 1 day before or on the day of check-in.',
       'Special promotions or package deals may be subject to separate cancellation policies.',
     ],
   },
   ja: {
     heading: '第4条（予約変更・キャンセル）',
     body: [
-      'チェックイン3日前まで無料で変更・キャンセルが可能です。',
-      'チェックイン2日前：客室料金の50%のキャンセル料',
-      'チェックイン前日または当日：客室料金の100%のキャンセル料',
-      'ノーショー：客室料金の100%',
+      '本ホームページからのご予約は、チェックイン24時間前まで無料で変更・キャンセルいただけます。',
+      'チェックイン24時間以内のキャンセルおよびノーショーには、キャンセル料が発生します。',
+      'ご滞在中の返金はチェックイン3日前を基準に算定し、チェックイン2日前は50%、前日または当日は100%のキャンセル料が発生します。',
       '特別プロモーションやパッケージ商品には別途キャンセルポリシーが適用される場合があります。',
     ],
   },
   zh: {
     heading: '第四条 预订变更与取消',
     body: [
-      '入住前3天可免费变更或取消预订。',
-      '入住前2天：收取房费的50%作为取消费',
-      '入住前1天或当天：收取房费的100%作为取消费',
-      '未到（No-show）：收取房费的100%',
+      '通过本官网预订的房间可在入住前24小时之前免费变更或取消。',
+      '入住前24小时以内取消及未到（No-show）将收取取消费用。',
+      '住宿期间的退款以入住前3天为基准计算：入住前2天收取房费的50%，入住前1天或当天收取房费的100%。',
       '特别促销或套餐产品可能适用其他取消政策。',
     ],
   },
