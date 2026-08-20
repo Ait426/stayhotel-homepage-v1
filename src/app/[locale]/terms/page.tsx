@@ -18,6 +18,19 @@ export async function generateMetadata({ params }: PageProps) {
   return { title: titles[params.locale] || titles.en };
 }
 
+/**
+ * 항 번호 (①②③…)
+ *
+ * 번호는 본문 문자열에 넣지 않고 렌더링 시점에 붙인다.
+ * 문구에 박아두면 항을 추가·삭제할 때마다 번호를 손으로 다시 매겨야 한다.
+ * 항이 하나뿐인 조항에는 번호를 쓰지 않는 것이 법령 표기 관례다.
+ */
+const CLAUSE_NUMBERS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳'];
+
+function clauseNumber(index: number): string {
+  return CLAUSE_NUMBERS[index] || `(${index + 1})`;
+}
+
 const content: Record<string, { title: string; lastUpdated: string; sections: { heading: string; body: string[] }[] }> = {
   ko: {
     title: '이용약관',
@@ -350,13 +363,16 @@ export default async function TermsPage({ params }: PageProps) {
                 <h2 className="text-lg font-medium text-primary-900 mb-4 tracking-wide">
                   {section.heading}
                 </h2>
-                <div className="space-y-2">
+                <ol className="space-y-2 list-none">
                   {section.body.map((line, j) => (
-                    <p key={j} className="text-sm text-neutral-600 leading-relaxed">
-                      {line}
-                    </p>
+                    <li key={j} className="flex gap-2 text-sm text-neutral-600 leading-relaxed">
+                      {section.body.length > 1 && (
+                        <span className="flex-shrink-0 text-primary-900">{clauseNumber(j)}</span>
+                      )}
+                      <span>{line}</span>
+                    </li>
                   ))}
-                </div>
+                </ol>
               </div>
             ))}
           </div>
