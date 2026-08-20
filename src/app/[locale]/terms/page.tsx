@@ -2,7 +2,7 @@ export const runtime = 'edge';
 
 import { Locale } from '@/types';
 import { getBrandConfig } from '@/config/brand';
-import { cancellationPolicy } from '@/config/policy';
+import { termsCancellationArticle } from '@/config/policy';
 
 interface PageProps {
   params: { locale: string };
@@ -49,7 +49,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: '제4조 (예약 변경 및 취소)',
-        body: cancellationPolicy.ko.body,
+        body: termsCancellationArticle.ko.body,
       },
       {
         heading: '제5조 (고객의 의무)',
@@ -123,7 +123,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: 'Article 4. Modification and Cancellation',
-        body: cancellationPolicy.en.body,
+        body: termsCancellationArticle.en.body,
       },
       {
         heading: 'Article 5. Guest Responsibilities',
@@ -197,7 +197,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: '第4条（予約変更・キャンセル）',
-        body: cancellationPolicy.ja.body,
+        body: termsCancellationArticle.ja.body,
       },
       {
         heading: '第5条（お客様の義務）',
@@ -271,7 +271,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: '第四条 预订变更与取消',
-        body: cancellationPolicy.zh.body,
+        body: termsCancellationArticle.zh.body,
       },
       {
         heading: '第五条 客人的义务',

@@ -910,7 +910,7 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
                 <h3 id="cancellation-policy-title" className="font-serif text-xl text-primary-900 tracking-wide">
                   {policy.title}
                 </h3>
-                <p className="text-xs text-neutral-400 mt-1">{policy.articleHeading}</p>
+                <p className="text-xs text-neutral-400 mt-1">{policy.scopeLabel}</p>
               </div>
               <button
                 type="button"
