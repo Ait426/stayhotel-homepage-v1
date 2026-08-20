@@ -94,7 +94,7 @@ function calculateNights(checkIn: string, checkOut: string): number {
 const PROMO_LABELS: Record<string, { ko: string; en: string }> = {
   longstay_10: { ko: '연박 10% 할인', en: '10% Long-Stay Discount' },
   longstay_15: { ko: '연박 15% 할인', en: '15% Long-Stay Discount' },
-  military_fixed: { ko: 'US Military Special ($64 고정)', en: 'US Military Special ($64 Fixed)' },
+  military_fixed: { ko: 'US Military Special', en: 'US Military Special' },
 };
 
 /**
@@ -120,7 +120,7 @@ function getBookingDetails(data: BookingFormData, finalAmount?: number, pricing?
   const discountAmount = pricing?.discountAmount ?? 0;
   // 서버에서 검증된 금액 사용; 없으면 base + extra로 계산
   const totalPrice = pricing?.finalAmount ?? finalAmount ?? (basePrice + extraGuestFee);
-  // 미군 특가는 $64 고정 요금(USD)이므로 ₩로 표기하면 안 된다
+  // 미군 특가는 USD 고정 요금이므로 ₩로 표기하면 안 된다
   const isMilitary = data.appliedPromo === 'military_fixed';
   const priceText = totalPrice > 0
     ? (isMilitary ? `$${totalPrice.toLocaleString()}` : formatPrice(totalPrice, 'ko'))
@@ -299,7 +299,7 @@ export async function sendConfirmationEmail(
   const hotelEmail = brand.contact.email;
   const hotelPhone = brand.contact.phone;
   const brandName = brand.name.ko;
-  const { roomName, roomNameEn, nights, basePriceText, extraGuestCount, extraGuestFee, extraGuestFeeUnit, extraFeeText, discountText, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, promoLabelKo, promoLabelEn } = getBookingDetails(data, finalAmount, pricing);
+  const { roomName, roomNameEn, nights, basePriceText, extraGuestCount, extraGuestFee, extraGuestFeeUnit, extraFeeText, discountText, totalPrice, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, promoLabelKo, promoLabelEn } = getBookingDetails(data, finalAmount, pricing);
   const fromEmail = process.env.EMAIL_FROM || 'noreply@pyeongtaekstay.com';
   const confirmedDate = new Date().toISOString().split('T')[0];
 
@@ -423,7 +423,7 @@ export async function sendConfirmationEmail(
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
               <tr>
                 <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #888888; padding-bottom: 6px;">객실 요금 / Room Rate</td>
-                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #1a1a2e; padding-bottom: 6px;">${isMilitary ? '$64/박 고정' : basePriceText} (${nights}박/${nights} night${nights > 1 ? 's' : ''})</td>
+                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #1a1a2e; padding-bottom: 6px;">${isMilitary ? `$${nights > 0 ? Math.round(totalPrice / nights) : totalPrice}/박 고정` : basePriceText} (${nights}박/${nights} night${nights > 1 ? 's' : ''})</td>
               </tr>
               ${!isMilitary && extraGuestFee > 0 ? `<tr>
                 <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #e65100; padding-bottom: 6px;">추가 인원 / Extra Guests</td>

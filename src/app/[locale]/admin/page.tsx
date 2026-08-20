@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useEffect, Fragment } from 'react';
 import { getRoomById } from '@/config/rooms';
+import { MILITARY_FIXED_RATE_USD } from '@/config/events';
 
 interface PricingSnapshot {
   baseAmount: number;
@@ -130,15 +131,17 @@ function calculateNights(checkIn: string, checkOut: string): number {
 
 /**
  * Smart currency display:
- * - military_fixed → "$64 × N nights" (USD)
+ * - military_fixed → 저장된 USD 금액 (요금 변경 시 과거 예약이 소급되지 않도록)
  * - KRW finalAmount → "63,000원"
  * - Missing finalAmount (legacy) → fallback to base price estimate
  */
 function formatDisplayPrice(b: BookingRecord): { text: string; isFallback: boolean } {
-  // Military fixed rate: always USD
+  // Military fixed rate: always USD — 예약 시점에 저장된 금액을 쓴다
   if (b.appliedPromo === 'military_fixed') {
+    const stored = b.pricing?.finalAmount ?? b.finalAmount;
+    if (stored != null && stored > 0) return { text: `$${stored.toLocaleString()}`, isFallback: false };
     const nights = calculateNights(b.formData.checkIn, b.formData.checkOut);
-    return { text: `$${64 * nights}`, isFallback: false };
+    return { text: `$${MILITARY_FIXED_RATE_USD * nights}`, isFallback: true };
   }
   // Has finalAmount from frontend → KRW with comma
   if (b.finalAmount != null && b.finalAmount > 0) {
@@ -563,7 +566,7 @@ export default function AdminPage() {
                             </div>
                             <div>
                               <span className="text-slate-400 block">프로모션</span>
-                              <span className="text-slate-700 mt-0.5 block">{b.appliedPromo ? (b.appliedPromo === 'military_fixed' ? 'Military $64' : b.appliedPromo === 'longstay_15' ? '연박15%' : b.appliedPromo === 'longstay_10' ? '연박10%' : b.appliedPromo) : '-'}</span>
+                              <span className="text-slate-700 mt-0.5 block">{b.appliedPromo ? (b.appliedPromo === 'military_fixed' ? 'US Military' : b.appliedPromo === 'longstay_15' ? '연박15%' : b.appliedPromo === 'longstay_10' ? '연박10%' : b.appliedPromo) : '-'}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 block">군인할인</span>

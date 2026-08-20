@@ -15,6 +15,7 @@ import { BookingFormData } from '@/types';
 import { saveBooking, PricingSnapshot } from '@/lib/booking-store';
 import { sendBookingEmail } from '@/lib/email';
 import { getRoomById, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
+import { MILITARY_FIXED_RATE_USD } from '@/config/events';
 
 /**
  * 서버 측 가격 snapshot 생성 — 클라이언트 finalAmount를 신뢰하지 않음
@@ -33,9 +34,9 @@ function buildPricingSnapshot(body: BookingFormData): PricingSnapshot {
   const extraGuestFeeTotal = calculateExtraGuestFee(room, body.guestCount, nights);
   const subtotal = baseAmount + extraGuestFeeTotal;
 
-  // 미군 특가: $64 × 박 수 (USD 고정, 추가요금 없음)
+  // 미군 특가: 고정 요금 × 박 수 (USD, 추가요금 없음)
   if (body.appliedPromo === 'military_fixed') {
-    return { baseAmount, extraGuestCount: 0, extraGuestFeeUnit: 0, extraGuestFeeTotal: 0, discountAmount: 0, finalAmount: nights * 64, nights };
+    return { baseAmount, extraGuestCount: 0, extraGuestFeeUnit: 0, extraGuestFeeTotal: 0, discountAmount: 0, finalAmount: nights * MILITARY_FIXED_RATE_USD, nights };
   }
 
   // 연박 할인

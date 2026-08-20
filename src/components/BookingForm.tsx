@@ -11,6 +11,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from '@/lib/translations';
 import { Locale, BookingFormData, ReservationType, TransportationType } from '@/types';
 import { rooms, getRoomName, formatPrice, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
+import { MILITARY_FIXED_RATE_USD } from '@/config/events';
+import { getCancellationPolicy } from '@/config/policy';
 import DatePickerInput from './DatePickerInput';
 import DropdownSelect from './DropdownSelect';
 import { getTodayString, getTomorrowString, calculateNights, formatCurrency } from '@/lib/utils';
@@ -53,6 +55,9 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingId, setBookingId] = useState<string>('');
   const [error, setError] = useState<string>('');
+  // 취소·환불 규정 팝업
+  const [isPolicyOpen, setIsPolicyOpen] = useState(false);
+  const policy = getCancellationPolicy(locale);
 
   // Form data
   const [formData, setFormData] = useState<BookingFormData>({
@@ -76,6 +81,24 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
     }
   }, [preselectedRoomId]);
 
+  // 규정 팝업: ESC로 닫기 + 열려 있는 동안 배경 스크롤 잠금
+  useEffect(() => {
+    if (!isPolicyOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsPolicyOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isPolicyOpen]);
+
   // Get selected room
   const selectedRoom = rooms.find((r) => r.id === formData.roomId);
 
@@ -95,8 +118,8 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
     return { rate: 0, label: null, amount: 0 };
   })();
 
-  // Military fixed rate: $64/night (추가 인원 요금 없음)
-  const militaryFixedRate = isMilitaryPromo ? nights * 64 : 0;
+  // Military fixed rate: 고정 요금/박 (추가 인원 요금 없음)
+  const militaryFixedRate = isMilitaryPromo ? nights * MILITARY_FIXED_RATE_USD : 0;
   const finalPrice = isMilitaryPromo ? militaryFixedRate : (promoDiscount.rate > 0 ? totalPrice - promoDiscount.amount : totalPrice);
 
   // 전체 객실 중 최대 인원 (드롭다운 상한)
@@ -292,7 +315,7 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
           <div className="mb-8 p-4 bg-blue-50 border border-blue-300 flex items-center gap-3">
             <span className="inline-block px-3 py-1 bg-blue-700 text-white text-xs font-bold uppercase tracking-wider rounded-full flex-shrink-0">US MILITARY</span>
             <span className="text-blue-900 text-sm font-medium">
-              {{ ko: 'US Military Special Rate 적용 ($64 고정)', en: 'US Military Special Rate Applied ($64 Fixed)', ja: 'US Military Special Rate 適用 ($64 固定)', zh: 'US Military Special Rate 已应用 ($64 固定)' }[locale]}
+              {{ ko: `US Military Special Rate 적용 ($${MILITARY_FIXED_RATE_USD} 고정)`, en: `US Military Special Rate Applied ($${MILITARY_FIXED_RATE_USD} Fixed)`, ja: `US Military Special Rate 適用 ($${MILITARY_FIXED_RATE_USD} 固定)`, zh: `US Military Special Rate 已应用 ($${MILITARY_FIXED_RATE_USD} 固定)` }[locale]}
             </span>
           </div>
         )}
@@ -637,11 +660,11 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
                     <div className="flex justify-between mb-2">
                       <span className="text-neutral-500 text-sm">US Military Special Rate</span>
                       <span className="font-medium text-primary-900">
-                        $64 × {nights} {{ ko: '박', en: ' nights', ja: '泊', zh: '晚' }[locale]}
+                        ${MILITARY_FIXED_RATE_USD} × {nights} {{ ko: '박', en: ' nights', ja: '泊', zh: '晚' }[locale]}
                       </span>
                     </div>
                     <div className="p-3 mb-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs">
-                      {{ ko: '$64 고정 요금 적용 (주말 할증 없음) · 디럭스 무료 업그레이드 · 1인 조식 포함', en: 'Flat $64/night (No weekend surcharge) · Free Deluxe upgrade · Breakfast for 1 included', ja: '$64固定料金適用（週末割増なし）· デラックス無料UP · 朝食1名付', zh: '$64固定价格（无周末加价）· 免费升级豪华房 · 含1人早餐' }[locale]}
+                      {{ ko: `$${MILITARY_FIXED_RATE_USD} 고정 요금 적용 (주말 할증 없음) · 디럭스 무료 업그레이드 · 1인 조식 포함`, en: `Flat $${MILITARY_FIXED_RATE_USD}/night (No weekend surcharge) · Free Deluxe upgrade · Breakfast for 1 included`, ja: `$${MILITARY_FIXED_RATE_USD}固定料金適用（週末割増なし）· デラックス無料UP · 朝食1名付`, zh: `$${MILITARY_FIXED_RATE_USD}固定价格（无周末加价）· 免费升级豪华房 · 含1人早餐` }[locale]}
                     </div>
                     <div className="flex justify-between pt-4 border-t border-neutral-200">
                       <span className="font-medium text-primary-900">{t('total')}</span>
@@ -723,20 +746,30 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
               <p className="text-neutral-600 text-sm leading-relaxed mb-4">
                 {t('cancellationPolicySummary')}
               </p>
-              <label className="flex items-start gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={formData.agreedToPolicy}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, agreedToPolicy: e.target.checked }));
-                    setError('');
-                  }}
-                  className="mt-0.5 w-5 h-5 accent-primary-900 flex-shrink-0"
-                />
-                <span className="text-sm font-medium text-primary-900">
-                  {t('agreeCancellationPolicy')}
-                </span>
-              </label>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formData.agreedToPolicy}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, agreedToPolicy: e.target.checked }));
+                      setError('');
+                    }}
+                    className="mt-0.5 w-5 h-5 accent-primary-900 flex-shrink-0"
+                  />
+                  <span className="text-sm font-medium text-primary-900">
+                    {t('agreeCancellationPolicy')}
+                  </span>
+                </label>
+                {/* 규정 전문 — 별도 팝업으로 표시 (동의 대상이 무엇인지 폼에서 바로 확인 가능해야 함) */}
+                <button
+                  type="button"
+                  onClick={() => setIsPolicyOpen(true)}
+                  className="text-sm font-medium text-primary-900 underline underline-offset-4 hover:text-accent-500 transition-colors min-h-[44px] px-1"
+                >
+                  {{ ko: '규정 전문 보기', en: 'View full policy', ja: '規定全文を見る', zh: '查看规定全文' }[locale]}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -857,6 +890,83 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
           </div>
         )}
       </div>
+
+      {/* 취소·환불 규정 팝업 — 내용은 config/policy.ts (이용약관 제4조와 동일 출처) */}
+      {isPolicyOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancellation-policy-title"
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsPolicyOpen(false)}
+          />
+
+          <div className="relative bg-white w-full max-w-lg max-h-[85vh] flex flex-col shadow-large">
+            <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-neutral-200">
+              <div>
+                <h3 id="cancellation-policy-title" className="font-serif text-xl text-primary-900 tracking-wide">
+                  {policy.title}
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1">{policy.articleHeading}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPolicyOpen(false)}
+                aria-label={{ ko: '닫기', en: 'Close', ja: '閉じる', zh: '关闭' }[locale]}
+                className="text-neutral-400 hover:text-primary-900 transition-colors text-2xl leading-none flex-shrink-0 min-h-[44px] min-w-[44px]"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="px-6 py-5 overflow-y-auto">
+              <ul className="space-y-3">
+                {policy.body.map((line, index) => (
+                  <li key={index} className="flex gap-3 text-sm text-neutral-700 leading-relaxed">
+                    <span className="text-accent-500 flex-shrink-0">&#8226;</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-5 pt-4 border-t border-neutral-100 text-xs text-neutral-500 leading-relaxed">
+                {policy.note}
+              </p>
+              <a
+                href={`/${locale}/terms`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-3 text-xs text-primary-900 underline underline-offset-4 hover:text-accent-500 transition-colors"
+              >
+                {policy.fullTermsLabel}
+              </a>
+            </div>
+
+            <div className="px-6 py-4 border-t border-neutral-200 flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => setIsPolicyOpen(false)}
+                className="flex-1 px-6 py-3 min-h-[48px] border border-neutral-300 text-neutral-600 text-sm tracking-widest uppercase transition-all duration-300 hover:border-primary-900 hover:text-primary-900"
+              >
+                {{ ko: '닫기', en: 'Close', ja: '閉じる', zh: '关闭' }[locale]}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({ ...prev, agreedToPolicy: true }));
+                  setError('');
+                  setIsPolicyOpen(false);
+                }}
+                className="flex-1 px-6 py-3 min-h-[48px] bg-primary-900 text-white text-sm tracking-widest uppercase transition-all duration-300 hover:bg-accent-500"
+              >
+                {{ ko: '동의하고 닫기', en: 'Agree & close', ja: '同意して閉じる', zh: '同意并关闭' }[locale]}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

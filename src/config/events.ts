@@ -1,3 +1,13 @@
+/**
+ * US Military 특가 1박 고정 요금 (USD)
+ *
+ * 미군 정책에 따라 변경된다. 2026-08-20 $64 → $62.
+ * 표시·계산하는 모든 지점이 이 값을 참조해야 한다. 값을 복제하면 다음 변경 때 일부만 바뀐다.
+ * 단, **이미 접수된 예약**은 예약 시점에 저장된 pricing snapshot의 금액을 그대로 쓴다.
+ * (요금이 바뀌어도 과거 예약의 청구액이 소급 변경되면 안 되기 때문)
+ */
+export const MILITARY_FIXED_RATE_USD = 62;
+
 export type TabType = 'all' | 'room' | 'event';
 
 export interface Offer {
@@ -110,12 +120,12 @@ export const offers: Offer[] = [
         image: '/images/events/military-special.png',
         showHomeCta: true,
         title: { ko: 'US MILITARY 스페셜 특가', en: 'US Military Special Rate', ja: 'US MILITARY スペシャル特価', zh: 'US MILITARY 特价优惠' },
-        subtitle: { ko: '주말 할증 없는 $64 고정 요금 및 특별 혜택', en: 'Flat $64 Rate Every Day & Exclusive Perks', ja: '週末割増なし $64 固定料金＆特別特典', zh: '无周末加价 $64固定价格及专属福利' },
-        desc: { ko: '1박 $64 고정 · 디럭스 무료 업그레이드 · 1인 조식 포함 · 웰컴 기프트', en: 'Flat $64/night · Free Deluxe upgrade · Breakfast included · Welcome Gift', ja: '1泊$64固定 · デラックス無料UP · 朝食1名付 · ウェルカムギフト', zh: '每晚$64固定 · 免费升级豪华房 · 含1人早餐 · 欢迎礼物' },
+        subtitle: { ko: `주말 할증 없는 $${MILITARY_FIXED_RATE_USD} 고정 요금 및 특별 혜택`, en: `Flat $${MILITARY_FIXED_RATE_USD} Rate Every Day & Exclusive Perks`, ja: `週末割増なし $${MILITARY_FIXED_RATE_USD} 固定料金＆特別特典`, zh: `无周末加价 $${MILITARY_FIXED_RATE_USD}固定价格及专属福利` },
+        desc: { ko: `1박 $${MILITARY_FIXED_RATE_USD} 고정 · 디럭스 무료 업그레이드 · 1인 조식 포함 · 웰컴 기프트`, en: `Flat $${MILITARY_FIXED_RATE_USD}/night · Free Deluxe upgrade · Breakfast included · Welcome Gift`, ja: `1泊$${MILITARY_FIXED_RATE_USD}固定 · デラックス無料UP · 朝食1名付 · ウェルカムギフト`, zh: `每晚$${MILITARY_FIXED_RATE_USD}固定 · 免费升级豪华房 · 含1人早餐 · 欢迎礼物` },
         period: { ko: '상시 운영', en: 'Always Available', ja: '常時開催', zh: '常年有效' },
         details: {
             ko: [
-                '1박 $64 고정 요금 (주중/주말 동일 — 주말 할증 없음)',
+                `1박 $${MILITARY_FIXED_RATE_USD} 고정 요금 (주중/주말 동일 — 주말 할증 없음)`,
                 '스탠다드 → 디럭스 룸 무료 업그레이드',
                 '1인 무료 조식 포함',
                 '무료 레이트 체크아웃',
@@ -126,7 +136,7 @@ export const offers: Offer[] = [
                 '사전 예약 시 예약 유형을 "군인"으로 선택해 주세요',
             ],
             en: [
-                'Flat $64/night (No weekend surcharges — same rate every day)',
+                `Flat $${MILITARY_FIXED_RATE_USD}/night (No weekend surcharges — same rate every day)`,
                 'Free upgrade from Standard to Deluxe Room',
                 'Breakfast for 1 included',
                 'Complimentary Late Check-out',
@@ -137,7 +147,7 @@ export const offers: Offer[] = [
                 'Must select "Military" as your booking type when reserving online',
             ],
             ja: [
-                '1泊$64固定料金（平日/週末同一 — 週末割増なし）',
+                `1泊$${MILITARY_FIXED_RATE_USD}固定料金（平日/週末同一 — 週末割増なし）`,
                 'スタンダード → デラックスルーム無料アップグレード',
                 '1名様朝食無料',
                 'レイトチェックアウト無料',
@@ -148,7 +158,7 @@ export const offers: Offer[] = [
                 'オンライン予約時は予約タイプを「軍人」に選択してください',
             ],
             zh: [
-                '每晚$64固定价格（工作日/周末相同 — 无周末加价）',
+                `每晚$${MILITARY_FIXED_RATE_USD}固定价格（工作日/周末相同 — 无周末加价）`,
                 '标准房 → 豪华房免费升级',
                 '含1人免费早餐',
                 '免费延迟退房',

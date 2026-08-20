@@ -125,7 +125,7 @@ function bookingDetailRows(booking: StoredBooking): string {
   const room = getRoomById(data.roomId);
   const roomName = room ? getRoomName(room, 'ko') : data.roomId;
   const nights = calculateNights(data.checkIn, data.checkOut);
-  const promoLabel = booking.appliedPromo === 'military_fixed' ? 'Military $64'
+  const promoLabel = booking.appliedPromo === 'military_fixed' ? 'US Military Special'
     : booking.appliedPromo === 'longstay_15' ? '연박 15%'
     : booking.appliedPromo === 'longstay_10' ? '연박 10%'
     : null;
