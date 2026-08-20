@@ -30,8 +30,11 @@ const CF_GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql';
 
 /**
  * Cloudflare GraphQL 호출 헬퍼
+ *
+ * CF는 토큰 권한 부족이나 잘못된 zone에도 HTTP 200 + errors 배열로 응답한다.
+ * 이걸 무시하면 화면에 0만 잔뜩 찍히고 원인을 알 수 없으므로 errors도 예외로 올린다.
  */
-async function cfQuery(token: string, query: string): Promise<{ data: unknown; errors?: unknown[] }> {
+async function cfQuery(token: string, query: string): Promise<{ data: unknown }> {
   const res = await fetch(CF_GRAPHQL, {
     method: 'POST',
     headers: {
@@ -46,7 +49,14 @@ async function cfQuery(token: string, query: string): Promise<{ data: unknown; e
     throw new Error(`Cloudflare API ${res.status}: ${text.slice(0, 200)}`);
   }
 
-  return res.json();
+  const json = (await res.json()) as { data?: unknown; errors?: { message?: string }[] };
+
+  if (Array.isArray(json.errors) && json.errors.length > 0) {
+    const messages = json.errors.map((e) => e?.message).filter(Boolean).join(' / ');
+    throw new Error(messages || 'Cloudflare GraphQL 오류 (상세 메시지 없음)');
+  }
+
+  return { data: json.data };
 }
 
 export async function GET(request: NextRequest) {
@@ -60,9 +70,22 @@ export async function GET(request: NextRequest) {
   const cfToken = getEnv('CLOUDFLARE_API_TOKEN');
   const zoneId = getEnv('CLOUDFLARE_ZONE_ID');
 
+  // 미설정은 '오류'가 아니라 '설정 필요' 상태 — 화면에서 안내를 띄울 수 있게 코드로 구분한다
   if (!cfToken || !zoneId) {
+    const missing = [
+      !cfToken ? 'CLOUDFLARE_API_TOKEN' : null,
+      !zoneId ? 'CLOUDFLARE_ZONE_ID' : null,
+    ].filter(Boolean) as string[];
+
+    console.warn(`[cf-analytics] 환경변수 미설정: ${missing.join(', ')}`);
+
     return NextResponse.json(
-      { success: false, error: 'CLOUDFLARE_API_TOKEN 또는 CLOUDFLARE_ZONE_ID 미설정' },
+      {
+        success: false,
+        code: 'not_configured',
+        missing,
+        error: `${missing.join(', ')} 미설정`,
+      },
       { status: 503 }
     );
   }
@@ -137,12 +160,23 @@ export async function GET(request: NextRequest) {
       }));
     }
   } catch (err) {
-    console.error('[cf-analytics] Series query failed:', err);
-    // KPI/chart는 기본값(0) 유지, 에러 시에도 계속 진행
+    // 핵심 지표라 실패를 숨기면 안 된다. 0으로 채워 보내면 '트래픽이 없다'로 오해된다.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[cf-analytics] Series query failed:', message);
+    return NextResponse.json(
+      {
+        success: false,
+        code: 'cf_error',
+        error: `Cloudflare 통계 조회 실패: ${message}`,
+      },
+      { status: 502 }
+    );
   }
 
-  // --- 쿼리 2: Top URLs (httpRequestsAdaptiveGroups — 실패 시 빈 배열) ---
+  // --- 쿼리 2: Top URLs (httpRequestsAdaptiveGroups — 요금제에 따라 미제공) ---
+  // 이쪽은 실패해도 KPI/추이는 보여줄 수 있으므로 빈 배열로 넘어간다.
   let topUrls: { path: string; count: number }[] = [];
+  let topUrlsError: string | null = null;
 
   try {
     const topQuery = `{
@@ -173,8 +207,9 @@ export async function GET(request: NextRequest) {
       }));
     }
   } catch (err) {
-    console.error('[cf-analytics] Top URLs query failed (may not be available on this plan):', err);
-    // topUrls 빈 배열 유지
+    topUrlsError = err instanceof Error ? err.message : String(err);
+    console.error('[cf-analytics] Top URLs query failed (may not be available on this plan):', topUrlsError);
+    // topUrls 빈 배열 유지 — KPI는 정상 반환한다
   }
 
   // --- 5분 캐시 ---
@@ -184,6 +219,7 @@ export async function GET(request: NextRequest) {
     kpi,
     chart,
     topUrls,
+    topUrlsError,
   });
   response.headers.set('Cache-Control', 'private, max-age=300');
   return response;
