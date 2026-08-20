@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { Locale } from '@/types';
 import { getBrandConfig } from '@/config/brand';
+import { cancellationPolicy } from '@/config/policy';
 
 interface PageProps {
   params: { locale: string };
@@ -48,13 +49,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: '제4조 (예약 변경 및 취소)',
-        body: [
-          '예약 변경 및 취소는 체크인 3일 전까지 무료로 가능합니다.',
-          '체크인 2일 전: 객실 요금의 50% 취소 수수료',
-          '체크인 1일 전 또는 당일: 객실 요금의 100% 취소 수수료',
-          '노쇼(No-show): 객실 요금의 100% 부과',
-          '특별 프로모션 또는 패키지 상품은 별도의 취소 정책이 적용될 수 있습니다.',
-        ],
+        body: cancellationPolicy.ko.body,
       },
       {
         heading: '제5조 (고객의 의무)',
@@ -128,13 +123,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: 'Article 4. Modification and Cancellation',
-        body: [
-          'Free modification or cancellation is available up to 3 days before check-in.',
-          '2 days before check-in: 50% cancellation fee',
-          '1 day before or on the day of check-in: 100% cancellation fee',
-          'No-show: 100% of room charge',
-          'Special promotions or package deals may be subject to separate cancellation policies.',
-        ],
+        body: cancellationPolicy.en.body,
       },
       {
         heading: 'Article 5. Guest Responsibilities',
@@ -208,13 +197,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: '第4条（予約変更・キャンセル）',
-        body: [
-          'チェックイン3日前まで無料で変更・キャンセルが可能です。',
-          'チェックイン2日前：客室料金の50%のキャンセル料',
-          'チェックイン前日または当日：客室料金の100%のキャンセル料',
-          'ノーショー：客室料金の100%',
-          '特別プロモーションやパッケージ商品には別途キャンセルポリシーが適用される場合があります。',
-        ],
+        body: cancellationPolicy.ja.body,
       },
       {
         heading: '第5条（お客様の義務）',
@@ -288,13 +271,7 @@ const content: Record<string, { title: string; lastUpdated: string; sections: { 
       },
       {
         heading: '第四条 预订变更与取消',
-        body: [
-          '入住前3天可免费变更或取消预订。',
-          '入住前2天：收取房费的50%作为取消费',
-          '入住前1天或当天：收取房费的100%作为取消费',
-          '未到（No-show）：收取房费的100%',
-          '特别促销或套餐产品可能适用其他取消政策。',
-        ],
+        body: cancellationPolicy.zh.body,
       },
       {
         heading: '第五条 客人的义务',
