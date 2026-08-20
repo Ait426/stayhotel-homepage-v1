@@ -258,7 +258,8 @@ export async function POST(request: NextRequest) {
 
   // ── Step 2: Send HTML receipt email to guest ──
   // MUST await — Cloudflare kills the isolate when the response is sent.
-  const emailResult = await sendConfirmationEmail(booking.formData, booking.bookingId, booking.finalAmount);
+  // pricing snapshot을 함께 넘겨야 영수증의 할인 금액과 합계가 맞는다
+  const emailResult = await sendConfirmationEmail(booking.formData, booking.bookingId, booking.finalAmount, booking.pricing);
 
   if (!emailResult.success) {
     console.error(`[booking-confirm] Email to guest failed for ${booking.bookingId}: ${emailResult.error}`);

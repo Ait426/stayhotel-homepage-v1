@@ -224,6 +224,7 @@ async function handleEmailCancel(request: NextRequest) {
     booking.bookingId,
     booking.cancelledAt || new Date().toISOString(),
     booking.finalAmount,
+    booking.pricing,
   );
 
   if (!emailResult.success) {
@@ -318,6 +319,7 @@ async function handleAdminCancel(request: NextRequest) {
     booking.bookingId,
     booking.cancelledAt || new Date().toISOString(),
     booking.finalAmount,
+    booking.pricing,
   );
 
   if (!emailResult.success) {

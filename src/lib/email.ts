@@ -97,17 +97,29 @@ const PROMO_LABELS: Record<string, { ko: string; en: string }> = {
   military_fixed: { ko: 'US Military Special ($64 고정)', en: 'US Military Special ($64 Fixed)' },
 };
 
-function getBookingDetails(data: BookingFormData, finalAmount?: number) {
+/**
+ * 메일 본문에 쓸 예약/가격 정보를 정리한다.
+ *
+ * pricing(서버가 저장한 PricingSnapshot)이 있으면 **그것을 그대로 쓴다.**
+ * snapshot 없이 객실 설정에서 재계산하면 할인 금액을 알 수 없어
+ * 영수증의 합계가 맞지 않고(객실요금+추가인원 ≠ 최종금액),
+ * 예약 이후 요금표가 바뀌면 과거 예약 메일의 숫자도 함께 흔들린다.
+ * pricing이 없는 건 snapshot 도입 이전의 레거시 예약뿐이며 그때만 재계산한다.
+ */
+function getBookingDetails(data: BookingFormData, finalAmount?: number, pricing?: PricingSnapshot) {
   const room = getRoomById(data.roomId);
   const roomName = room ? getRoomName(room, 'ko') : data.roomId;
   const roomNameEn = room ? getRoomName(room, 'en') : data.roomId;
-  const nights = calculateNights(data.checkIn, data.checkOut);
-  const basePrice = room ? calculateRoomTotal(room, data.checkIn, data.checkOut) : 0;
-  // 추가 인원 요금 (1인/1박 ₩10,000)
-  const extraGuestCount = room ? getExtraGuestCount(room, data.guestCount) : 0;
-  const extraGuestFee = room ? calculateExtraGuestFee(room, data.guestCount, nights) : 0;
-  // 서버에서 검증된 finalAmount 사용; 없으면 base + extra로 계산
-  const totalPrice = finalAmount != null ? finalAmount : (basePrice + extraGuestFee);
+  const nights = pricing?.nights ?? calculateNights(data.checkIn, data.checkOut);
+  const basePrice = pricing?.baseAmount ?? (room ? calculateRoomTotal(room, data.checkIn, data.checkOut) : 0);
+  // 추가 인원 요금
+  const extraGuestCount = pricing?.extraGuestCount ?? (room ? getExtraGuestCount(room, data.guestCount) : 0);
+  const extraGuestFee = pricing?.extraGuestFeeTotal ?? (room ? calculateExtraGuestFee(room, data.guestCount, nights) : 0);
+  const extraGuestFeeUnit = pricing?.extraGuestFeeUnit ?? (room?.extraGuestFee || 0);
+  // 프로모션 할인 금액 (snapshot에만 존재)
+  const discountAmount = pricing?.discountAmount ?? 0;
+  // 서버에서 검증된 금액 사용; 없으면 base + extra로 계산
+  const totalPrice = pricing?.finalAmount ?? finalAmount ?? (basePrice + extraGuestFee);
   // 미군 특가는 $64 고정 요금(USD)이므로 ₩로 표기하면 안 된다
   const isMilitary = data.appliedPromo === 'military_fixed';
   const priceText = totalPrice > 0
@@ -115,6 +127,7 @@ function getBookingDetails(data: BookingFormData, finalAmount?: number) {
     : '-';
   const basePriceText = basePrice > 0 ? formatPrice(basePrice, 'ko') : '-';
   const extraFeeText = extraGuestFee > 0 ? formatPrice(extraGuestFee, 'ko') : null;
+  const discountText = discountAmount > 0 ? formatPrice(discountAmount, 'ko') : null;
   const typeLabel = RESERVATION_TYPE_LABELS[data.reservationType]?.ko || data.reservationType;
   const typeLabelEn = RESERVATION_TYPE_LABELS[data.reservationType]?.en || data.reservationType;
   const transportLabel = TRANSPORTATION_LABELS[data.transportation]?.ko || data.transportation || '도보';
@@ -122,7 +135,7 @@ function getBookingDetails(data: BookingFormData, finalAmount?: number) {
   const appliedPromo = data.appliedPromo || null;
   const promoLabelKo = appliedPromo ? (PROMO_LABELS[appliedPromo]?.ko || appliedPromo) : null;
   const promoLabelEn = appliedPromo ? (PROMO_LABELS[appliedPromo]?.en || appliedPromo) : null;
-  return { room, roomName, roomNameEn, nights, basePrice, basePriceText, extraGuestCount, extraGuestFee, extraFeeText, totalPrice, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, appliedPromo, promoLabelKo, promoLabelEn };
+  return { room, roomName, roomNameEn, nights, basePrice, basePriceText, extraGuestCount, extraGuestFee, extraGuestFeeUnit, extraFeeText, discountAmount, discountText, totalPrice, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, appliedPromo, promoLabelKo, promoLabelEn };
 }
 
 /**
@@ -280,12 +293,13 @@ export async function sendConfirmationEmail(
   data: BookingFormData,
   bookingId: string,
   finalAmount?: number,
+  pricing?: PricingSnapshot,
 ): Promise<{ success: boolean; error?: string }> {
   const brand = getBrandConfig();
   const hotelEmail = brand.contact.email;
   const hotelPhone = brand.contact.phone;
   const brandName = brand.name.ko;
-  const { roomName, roomNameEn, nights, basePriceText, extraGuestCount, extraGuestFee, extraFeeText, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, promoLabelKo, promoLabelEn } = getBookingDetails(data, finalAmount);
+  const { roomName, roomNameEn, nights, basePriceText, extraGuestCount, extraGuestFee, extraGuestFeeUnit, extraFeeText, discountText, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, promoLabelKo, promoLabelEn } = getBookingDetails(data, finalAmount, pricing);
   const fromEmail = process.env.EMAIL_FROM || 'noreply@pyeongtaekstay.com';
   const confirmedDate = new Date().toISOString().split('T')[0];
 
@@ -413,10 +427,18 @@ export async function sendConfirmationEmail(
               </tr>
               ${!isMilitary && extraGuestFee > 0 ? `<tr>
                 <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #e65100; padding-bottom: 6px;">추가 인원 / Extra Guests</td>
-                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #e65100; padding-bottom: 6px;">+${extraFeeText} (${extraGuestCount}명 × ${nights}박 × ₩10,000)</td>
+                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #e65100; padding-bottom: 6px;">+${extraFeeText} (${extraGuestCount}명 × ${nights}박 × ₩${extraGuestFeeUnit.toLocaleString()})</td>
               </tr>` : ''}
-              ${promoLabelKo ? `<tr>
-                <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #2e7d32; padding-bottom: 8px;">적용 할인 / Discount</td>
+              ${isMilitary ? `<tr>
+                <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #2e7d32; padding-bottom: 8px;">적용 요금제 / Rate Plan</td>
+                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #2e7d32; padding-bottom: 8px;">US Military Special</td>
+              </tr>` : ''}
+              ${!isMilitary && discountText ? `<tr>
+                <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #2e7d32; padding-bottom: 8px;">할인 / Discount (${promoLabelKo})</td>
+                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #2e7d32; padding-bottom: 8px;">-${discountText}</td>
+              </tr>` : ''}
+              ${!isMilitary && !discountText && promoLabelKo ? `<tr>
+                <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #2e7d32; padding-bottom: 8px;">적용 프로모션 / Promotion</td>
                 <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #2e7d32; padding-bottom: 8px;">${promoLabelKo} / ${promoLabelEn}</td>
               </tr>` : ''}
               <tr>
@@ -530,12 +552,13 @@ export async function sendCancellationEmail(
   bookingId: string,
   cancelledAt: string,
   finalAmount?: number,
+  pricing?: PricingSnapshot,
 ): Promise<{ success: boolean; error?: string }> {
   const brand = getBrandConfig();
   const hotelEmail = brand.contact.email;
   const hotelPhone = brand.contact.phone;
   const brandName = brand.name.ko;
-  const { roomName, roomNameEn, nights, priceText } = getBookingDetails(data, finalAmount);
+  const { roomName, roomNameEn, nights, priceText } = getBookingDetails(data, finalAmount, pricing);
   const fromEmail = process.env.EMAIL_FROM || 'noreply@pyeongtaekstay.com';
   const cancelDate = cancelledAt.split('T')[0];
   const cancelTime = cancelledAt.split('T')[1]?.substring(0, 5) || '';
