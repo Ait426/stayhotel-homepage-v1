@@ -7,7 +7,7 @@
  */
 
 import { Room, RoomAmenity } from '@/types';
-import { getDayRate } from '@/config/special-rates';
+import { RateConfig, buildRateConfigFromRooms, getNightPrice } from '@/config/rate-plan';
 
 // ============================================
 // Common Amenities
@@ -261,26 +261,34 @@ export const getAvailableRooms = (): Room[] => {
   return rooms.filter((room) => room.isAvailable);
 };
 
+let defaultRateConfig: RateConfig | null = null;
+
+/**
+ * 기본 요금 설정 (KV에 저장된 설정이 없을 때) — 위 객실 요금으로 만든다
+ */
+export const getDefaultRateConfig = (): RateConfig => {
+  if (!defaultRateConfig) defaultRateConfig = buildRateConfigFromRooms(rooms);
+  return defaultRateConfig;
+};
+
 /**
  * 해당 날짜(그날 밤 숙박)의 1박 요금
- * 요일·공휴일 전날·연휴·12/24·12/31 규칙은 config/special-rates.ts 참조
+ * 날짜별 세트 지정 → 자동 규칙(config/special-rates.ts) 순으로 세트를 정한다 (config/rate-plan.ts)
+ * config를 생략하면 기본 설정. 서버는 lib/rate-store.ts의 getRateConfig()로 받은 값을 넘긴다.
  */
-export const getPriceForDate = (room: Room, date: Date): number => {
-  const { type, surcharge } = getDayRate(date);
-  if (type === 'saturday') return room.saturdayPrice + surcharge;
-  if (type === 'friday') return room.fridayPrice + surcharge;
-  return room.pricePerNight + surcharge;
+export const getPriceForDate = (room: Room, date: Date, config: RateConfig = getDefaultRateConfig()): number => {
+  return getNightPrice(config, room, date);
 };
 
 /**
  * Calculate total price for a stay period (day-by-day)
  */
-export const calculateRoomTotal = (room: Room, checkIn: string, checkOut: string): number => {
+export const calculateRoomTotal = (room: Room, checkIn: string, checkOut: string, config: RateConfig = getDefaultRateConfig()): number => {
   let total = 0;
   const current = new Date(checkIn + 'T00:00:00');
   const end = new Date(checkOut + 'T00:00:00');
   while (current < end) {
-    total += getPriceForDate(room, current);
+    total += getPriceForDate(room, current, config);
     current.setDate(current.getDate() + 1);
   }
   return total;

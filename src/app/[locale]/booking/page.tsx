@@ -8,6 +8,7 @@ export const runtime = 'edge';
 
 import BookingForm from '@/components/BookingForm';
 import { createTranslator } from '@/lib/translations';
+import { getRateConfig } from '@/lib/rate-store';
 
 interface BookingPageProps {
   params: { locale: string };
@@ -38,6 +39,8 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
   const initialGuestCount = searchParams?.guestCount;
   const initialReservationType = searchParams?.reservationType;
   const initialStep = searchParams?.step;
+  // admin '요금 관리'에서 저장한 요금 — 폼 금액이 서버 재계산과 같도록 같은 설정을 넘긴다
+  const rateConfig = await getRateConfig();
 
   return (
     <>
@@ -77,6 +80,7 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
               initialGuestCount={initialGuestCount ? Number(initialGuestCount) : undefined}
               initialReservationType={initialReservationType as 'general' | 'corporate' | 'military' | undefined}
               initialStep={initialStep as 'dates' | 'room' | undefined}
+              rateConfig={rateConfig}
             />
           </div>
         </div>

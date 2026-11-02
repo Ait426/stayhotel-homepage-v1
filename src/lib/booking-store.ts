@@ -46,7 +46,7 @@ export interface StoredBooking {
 /**
  * KV-compatible interface (subset of Cloudflare KVNamespace)
  */
-interface KVLike {
+export interface KVLike {
   get(key: string): Promise<string | null>;
   put(key: string, value: string): Promise<void>;
   list(options?: { prefix?: string }): Promise<{ keys: { name: string }[] }>;
@@ -72,8 +72,9 @@ const memoryFallback: KVLike = {
 
 /**
  * Get KV store — Cloudflare KV in production, in-memory in local dev
+ * 요금 설정(lib/rate-store.ts)도 같은 KV·같은 메모리 폴백을 쓰도록 export한다.
  */
-function getStore(): KVLike {
+export function getStore(): KVLike {
   try {
     const ctx = getRequestContext();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

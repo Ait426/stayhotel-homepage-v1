@@ -20,9 +20,11 @@ const BLUR_PLACEHOLDER = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wB
 interface RoomCardProps {
   room: Room;
   locale: Locale;
+  /** 표시할 1박 가격 (요금 관리 평일 세트). 없으면 기본 요금 */
+  nightlyPrice?: number;
 }
 
-export default function RoomCard({ room, locale }: RoomCardProps) {
+export default function RoomCard({ room, locale, nightlyPrice }: RoomCardProps) {
   const t = useTranslations('rooms');
 
   const roomName = getRoomName(room, locale);
@@ -51,7 +53,7 @@ export default function RoomCard({ room, locale }: RoomCardProps) {
           {/* Price Tag - Always visible on mobile, hover on desktop */}
           <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6 transform translate-y-0 opacity-100 md:translate-y-4 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 transition-all duration-500">
             <div className="flex items-baseline gap-2">
-              <span className="font-serif text-xl sm:text-2xl text-white">{formatPrice(room.pricePerNight, locale)}</span>
+              <span className="font-serif text-xl sm:text-2xl text-white">{formatPrice(nightlyPrice ?? room.pricePerNight, locale)}</span>
               <span className="text-white/70 text-sm">~</span>
             </div>
           </div>

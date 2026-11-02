@@ -16,19 +16,22 @@ import { saveBooking, PricingSnapshot } from '@/lib/booking-store';
 import { sendBookingEmail } from '@/lib/email';
 import { getRoomById, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
 import { MILITARY_FIXED_RATE_USD } from '@/config/events';
+import { getRateConfig } from '@/lib/rate-store';
+import { RateConfig } from '@/config/rate-plan';
 
 /**
  * 서버 측 가격 snapshot 생성 — 클라이언트 finalAmount를 신뢰하지 않음
  * 이 snapshot이 이메일/admin의 유일한 가격 기준
+ * 객실 요금은 admin '요금 관리'에서 저장한 설정(KV)을 쓴다
  */
-function buildPricingSnapshot(body: BookingFormData): PricingSnapshot {
+function buildPricingSnapshot(body: BookingFormData, rateConfig: RateConfig): PricingSnapshot {
   const room = getRoomById(body.roomId);
   if (!room) return { baseAmount: 0, extraGuestCount: 0, extraGuestFeeUnit: 0, extraGuestFeeTotal: 0, discountAmount: 0, finalAmount: 0, nights: 0 };
 
   const diff = new Date(body.checkOut).getTime() - new Date(body.checkIn).getTime();
   const nights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 
-  const baseAmount = calculateRoomTotal(room, body.checkIn, body.checkOut);
+  const baseAmount = calculateRoomTotal(room, body.checkIn, body.checkOut, rateConfig);
   const extraGuestCount = getExtraGuestCount(room, body.guestCount);
   const extraGuestFeeUnit = room.extraGuestFee || 0;
   const extraGuestFeeTotal = calculateExtraGuestFee(room, body.guestCount, nights);
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 서버 측 가격 snapshot 생성 — 클라이언트 금액을 신뢰하지 않음
-    const pricing = buildPricingSnapshot(body);
+    const pricing = buildPricingSnapshot(body, await getRateConfig());
 
     // 클라이언트 금액과 서버 금액 불일치 시 로그 기록
     if (body.finalAmount != null && body.finalAmount !== pricing.finalAmount) {

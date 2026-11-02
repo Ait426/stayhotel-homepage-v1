@@ -1,23 +1,23 @@
 /**
- * 특수일 요금 설정 — 단일 출처
+ * 공휴일 · 요일 자동 규칙
  *
  * 요금은 '그날 밤 숙박'을 기준으로 정한다. '쉬는 날'은 토·일·공휴일이다.
  *
- * 1) 고정 특수일 (매년 같은 날짜, 아래 규칙보다 우선)
- *    - 12/24, 12/31 → 토요일 요금 + SPECIAL_DATE_SURCHARGE
- *    - 12/25        → 토요일 요금
- * 2) 그날도 쉬고 다음 날도 쉬는 날 → 토요일 요금 (토요일, 샌드위치데이, 연휴 중간)
- * 3) 다음 날만 쉬는 날          → 금요일 요금 (금요일, 공휴일 전날)
- * 4) 그 외                      → 평일 요금
+ * 1) 그날도 쉬고 다음 날도 쉬는 날 → 토요일 세트 (토요일, 샌드위치데이, 연휴 중간)
+ * 2) 다음 날만 쉬는 날          → 금요일 세트 (금요일, 공휴일 전날)
+ * 3) 그 외                      → 평일 세트
  *
- * 2)~3) 규칙은 기존 금·토 요금을 그대로 포함하므로 평소 요금은 바뀌지 않는다.
- * 예약 폼·서버 재계산·메일이 모두 rooms.ts의 getPriceForDate를 거치므로 여기만 고치면 된다.
+ * 이 규칙은 날짜 지정이 없는 날의 기본값이다. 12/24·12/31 같은 특수일은
+ * admin '요금 관리'의 날짜별 세트 지정으로 관리한다 (config/rate-plan.ts).
  */
 
-/** 12/24·12/31에 토요일 요금에 더하는 금액 (KRW) */
+/** 기본 설정의 12/24·12/31 할증 (토요일 요금에 더하는 금액, KRW) */
 export const SPECIAL_DATE_SURCHARGE = 20000;
 
-/** 매년 반복되는 고정 특수일 (MM-DD) */
+/** 기본 설정에 미리 넣어 둘 연도 — 이후 연도는 admin 달력에서 지정한다 */
+export const DEFAULT_SPECIAL_DATE_YEARS = [2026, 2027];
+
+/** 기본 설정의 특수일 (MM-DD). KV에 저장된 설정이 있으면 쓰이지 않는다 */
 export const FIXED_SPECIAL_DATES: Record<string, { base: 'saturday'; surcharge: number }> = {
   '12-24': { base: 'saturday', surcharge: SPECIAL_DATE_SURCHARGE },
   '12-31': { base: 'saturday', surcharge: SPECIAL_DATE_SURCHARGE },
@@ -87,12 +87,9 @@ export const isDayOff = (date: Date): boolean => {
 export type DayRateType = 'weekday' | 'friday' | 'saturday';
 
 /**
- * 해당 날짜(그날 밤 숙박)의 요금 유형과 추가 금액
+ * 해당 날짜(그날 밤 숙박)의 자동 요금 유형 (날짜 지정은 rate-plan.ts에서 먼저 반영)
  */
 export const getDayRate = (date: Date): { type: DayRateType; surcharge: number } => {
-  const fixed = FIXED_SPECIAL_DATES[toDateKey(date).slice(5)];
-  if (fixed) return { type: fixed.base, surcharge: fixed.surcharge };
-
   const next = new Date(date);
   next.setDate(next.getDate() + 1);
   const tomorrowOff = isDayOff(next);

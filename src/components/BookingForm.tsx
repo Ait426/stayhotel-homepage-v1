@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from '@/lib/translations';
 import { Locale, BookingFormData, ReservationType, TransportationType } from '@/types';
 import { rooms, getRoomName, formatPrice, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
-import { getDayRate } from '@/config/special-rates';
+import { RateConfig, resolveSetId } from '@/config/rate-plan';
 import { MILITARY_FIXED_RATE_USD } from '@/config/events';
 import { getCancellationPolicy } from '@/config/policy';
 import DatePickerInput from './DatePickerInput';
@@ -26,6 +26,8 @@ interface BookingFormProps {
   initialGuestCount?: number;
   initialReservationType?: ReservationType;
   initialStep?: 'dates' | 'room';
+  /** 서버(booking/page.tsx)가 KV에서 읽은 요금 설정 */
+  rateConfig: RateConfig;
 }
 
 type FormStep = 'dates' | 'room' | 'info' | 'confirm' | 'success';
@@ -41,7 +43,7 @@ const transportationOptions: { value: TransportationType; label: Record<Locale, 
   { value: 'car', label: { ko: '차량', en: 'Car', ja: '車', zh: '车辆' } },
 ];
 
-export default function BookingForm({ locale, preselectedRoomId, initialCheckIn, initialCheckOut, initialGuestCount, initialReservationType, initialStep }: BookingFormProps) {
+export default function BookingForm({ locale, preselectedRoomId, initialCheckIn, initialCheckOut, initialGuestCount, initialReservationType, initialStep, rateConfig }: BookingFormProps) {
   const t = useTranslations('booking');
   const tErrors = useTranslations('errors');
   const router = useRouter();
@@ -105,7 +107,7 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
 
   // Calculate total price (day-by-day for Fri/Sat rates)
   const nights = calculateNights(formData.checkIn, formData.checkOut);
-  const roomBaseTotal = selectedRoom ? calculateRoomTotal(selectedRoom, formData.checkIn, formData.checkOut) : 0;
+  const roomBaseTotal = selectedRoom ? calculateRoomTotal(selectedRoom, formData.checkIn, formData.checkOut, rateConfig) : 0;
   // 추가 인원 요금
   const extraGuestFeeTotal = selectedRoom ? calculateExtraGuestFee(selectedRoom, formData.guestCount, nights) : 0;
   const totalPrice = roomBaseTotal + extraGuestFeeTotal;
@@ -126,12 +128,12 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
   // 전체 객실 중 최대 인원 (드롭다운 상한)
   const overallMaxGuests = Math.max(...rooms.map(r => r.maxGuests));
 
-  // 금·토 요금이 붙는 밤이 있는지 (공휴일 전날·연휴·12/24·12/31 포함, config/special-rates.ts)
+  // 평일 세트가 아닌 밤이 있는지 (금·토·공휴일 전날·연휴·특수 세트 지정일, config/rate-plan.ts)
   const includesWeekend = (() => {
     const current = new Date(formData.checkIn + 'T00:00:00');
     const end = new Date(formData.checkOut + 'T00:00:00');
     while (current < end) {
-      if (getDayRate(current).type !== 'weekday') return true;
+      if (resolveSetId(rateConfig, current) !== 'WEEK') return true;
       current.setDate(current.getDate() + 1);
     }
     return false;
@@ -494,7 +496,7 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
                     </div>
                     <div className="text-right">
                       {(() => {
-                        const roomTotal = calculateRoomTotal(room, formData.checkIn, formData.checkOut);
+                        const roomTotal = calculateRoomTotal(room, formData.checkIn, formData.checkOut, rateConfig);
                         const extraFee = calculateExtraGuestFee(room, formData.guestCount, nights);
                         return (
                           <>

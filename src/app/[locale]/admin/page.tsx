@@ -10,6 +10,7 @@
 import { useState, useCallback, useEffect, Fragment } from 'react';
 import { getRoomById } from '@/config/rooms';
 import { MILITARY_FIXED_RATE_USD } from '@/config/events';
+import RateManager from '@/components/admin/RateManager';
 
 interface PricingSnapshot {
   baseAmount: number;
@@ -196,6 +197,8 @@ export default function AdminPage() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [cancellingToken, setCancellingToken] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // 상단 탭 — 요금 관리는 숨김 처리만 해서 탭을 오가도 편집 중인 값이 유지된다
+  const [activeTab, setActiveTab] = useState<'bookings' | 'rates'>('bookings');
 
   // --- Cloudflare 통계 ---
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
@@ -393,7 +396,7 @@ export default function AdminPage() {
             {loading ? '로딩...' : '새로고침'}
           </button>
           <button
-            onClick={() => { setAuthenticated(false); setPassword(''); setBookings([]); }}
+            onClick={() => { setAuthenticated(false); setPassword(''); setBookings([]); setActiveTab('bookings'); }}
             className="px-4 py-2 text-xs font-medium border border-slate-300 text-slate-700 bg-white rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors"
           >
             로그아웃
@@ -401,6 +404,24 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* 상단 탭 */}
+      <div className="flex gap-1 mt-3">
+        {([['bookings', '예약 관리'], ['rates', '요금 관리']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg border transition-colors ${activeTab === key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className={activeTab === 'rates' ? '' : 'hidden'}>
+        <RateManager adminKey={password} active={activeTab === 'rates'} />
+      </div>
+
+      <div className={activeTab === 'bookings' ? '' : 'hidden'}>
       {/* ============================================ */}
       {/* Cloudflare 사이트 통계 (접이식)             */}
       {/* ============================================ */}
@@ -759,6 +780,7 @@ export default function AdminPage() {
             </tbody>
           </table>
         )}
+      </div>
       </div>
     </div>
   );

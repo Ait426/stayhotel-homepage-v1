@@ -10,6 +10,8 @@ import { Locale } from '@/types';
 import { rooms } from '@/config/rooms';
 import RoomCard from '@/components/RoomCard';
 import { createTranslator } from '@/lib/translations';
+import { getRateConfig } from '@/lib/rate-store';
+import { getSetPrice } from '@/config/rate-plan';
 
 interface RoomsPageProps {
   params: { locale: string };
@@ -26,6 +28,8 @@ export async function generateMetadata({ params }: RoomsPageProps) {
 
 export default async function RoomsPage({ params }: RoomsPageProps) {
   const { locale } = params;
+  // 카드의 '1박 ~부터' 가격은 admin '요금 관리'의 평일 세트 가격
+  const rateConfig = await getRateConfig();
 
   return (
     <>
@@ -71,7 +75,7 @@ export default async function RoomsPage({ params }: RoomsPageProps) {
                 className="opacity-0 animate-[fadeInUp_0.6s_ease-out_forwards]"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <RoomCard room={room} locale={locale as Locale} />
+                <RoomCard room={room} locale={locale as Locale} nightlyPrice={getSetPrice(rateConfig, room, 'WEEK')} />
               </div>
             ))}
           </div>
