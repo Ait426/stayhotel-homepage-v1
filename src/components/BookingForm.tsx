@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from '@/lib/translations';
 import { Locale, BookingFormData, ReservationType, TransportationType } from '@/types';
 import { rooms, getRoomName, formatPrice, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
+import { getDayRate } from '@/config/special-rates';
 import { MILITARY_FIXED_RATE_USD } from '@/config/events';
 import { getCancellationPolicy } from '@/config/policy';
 import DatePickerInput from './DatePickerInput';
@@ -125,13 +126,12 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
   // 전체 객실 중 최대 인원 (드롭다운 상한)
   const overallMaxGuests = Math.max(...rooms.map(r => r.maxGuests));
 
-  // Check if selected dates include Friday or Saturday (weekend surcharge)
+  // 금·토 요금이 붙는 밤이 있는지 (공휴일 전날·연휴·12/24·12/31 포함, config/special-rates.ts)
   const includesWeekend = (() => {
     const current = new Date(formData.checkIn + 'T00:00:00');
     const end = new Date(formData.checkOut + 'T00:00:00');
     while (current < end) {
-      const day = current.getDay();
-      if (day === 5 || day === 6) return true;
+      if (getDayRate(current).type !== 'weekday') return true;
       current.setDate(current.getDate() + 1);
     }
     return false;

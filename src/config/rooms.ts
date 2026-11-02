@@ -7,6 +7,7 @@
  */
 
 import { Room, RoomAmenity } from '@/types';
+import { getDayRate } from '@/config/special-rates';
 
 // ============================================
 // Common Amenities
@@ -261,14 +262,14 @@ export const getAvailableRooms = (): Room[] => {
 };
 
 /**
- * Get price for a specific date based on day of week
- * Friday(5) uses fridayPrice, Saturday(6) uses saturdayPrice, others use pricePerNight
+ * 해당 날짜(그날 밤 숙박)의 1박 요금
+ * 요일·공휴일 전날·연휴·12/24·12/31 규칙은 config/special-rates.ts 참조
  */
 export const getPriceForDate = (room: Room, date: Date): number => {
-  const day = date.getDay();
-  if (day === 5) return room.fridayPrice;
-  if (day === 6) return room.saturdayPrice;
-  return room.pricePerNight;
+  const { type, surcharge } = getDayRate(date);
+  if (type === 'saturday') return room.saturdayPrice + surcharge;
+  if (type === 'friday') return room.fridayPrice + surcharge;
+  return room.pricePerNight + surcharge;
 };
 
 /**
