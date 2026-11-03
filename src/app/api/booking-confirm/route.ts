@@ -25,6 +25,7 @@ import { confirmBooking, getBookingByToken, StoredBooking } from '@/lib/booking-
 import { sendConfirmationEmail } from '@/lib/email';
 import { getRoomById, getRoomName, formatPrice, calculateRoomTotal } from '@/config/rooms';
 import { escapeHtml } from '@/lib/utils';
+import { isUsdBooking, getBookingPromoLabel } from '@/config/promotion-plan';
 
 /** 검색엔진 색인 및 캐시 금지 — 토큰이 담긴 1회성 관리 화면 */
 const HTML_HEADERS: Record<string, string> = {
@@ -112,7 +113,7 @@ function formatBookingAmount(booking: StoredBooking): string {
   const basePrice = room ? calculateRoomTotal(room, data.checkIn, data.checkOut) : 0;
   const amount = booking.finalAmount != null ? booking.finalAmount : basePrice;
   if (amount <= 0) return '-';
-  if (booking.appliedPromo === 'military_fixed') return `$${amount.toLocaleString()}`;
+  if (isUsdBooking(booking)) return `$${amount.toLocaleString()}`;
   return formatPrice(amount, 'ko');
 }
 
@@ -125,10 +126,7 @@ function bookingDetailRows(booking: StoredBooking): string {
   const room = getRoomById(data.roomId);
   const roomName = room ? getRoomName(room, 'ko') : data.roomId;
   const nights = calculateNights(data.checkIn, data.checkOut);
-  const promoLabel = booking.appliedPromo === 'military_fixed' ? 'US Military Special'
-    : booking.appliedPromo === 'longstay_15' ? '연박 15%'
-    : booking.appliedPromo === 'longstay_10' ? '연박 10%'
-    : null;
+  const promoLabel = getBookingPromoLabel(booking, 'ko');
 
   return `
       <div class="row"><span class="label">예약번호</span><span class="value">${escapeHtml(booking.bookingId)}</span></div>
@@ -138,7 +136,7 @@ function bookingDetailRows(booking: StoredBooking): string {
       <div class="row"><span class="label">체크아웃</span><span class="value">${escapeHtml(data.checkOut)} (${nights}박)</span></div>
       <div class="row"><span class="label">인원</span><span class="value">${escapeHtml(String(data.guestCount))}명</span></div>
       <div class="row"><span class="label">방문 방법</span><span class="value">${data.transportation === 'car' ? '차량' : '도보'}</span></div>
-      ${promoLabel ? `<div class="row"><span class="label">적용 할인</span><span class="value" style="color: #2e7d32;">${promoLabel}</span></div>` : ''}
+      ${promoLabel ? `<div class="row"><span class="label">적용 할인</span><span class="value" style="color: #2e7d32;">${escapeHtml(promoLabel)}</span></div>` : ''}
       <div class="row"><span class="label">최종 금액</span><span class="value" style="color: #d4af37;">${escapeHtml(formatBookingAmount(booking))}</span></div>`;
 }
 

@@ -23,6 +23,7 @@
 import { BookingFormData } from '@/types';
 import { PricingSnapshot } from '@/lib/booking-store';
 import { getRoomById, getRoomName, formatPrice, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
+import { isUsdBooking, getBookingPromoLabel } from '@/config/promotion-plan';
 import { getBrandConfig } from '@/config/brand';
 import { escapeHtml, escapeHtmlMultiline } from '@/lib/utils';
 
@@ -91,11 +92,7 @@ function calculateNights(checkIn: string, checkOut: string): number {
   return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-const PROMO_LABELS: Record<string, { ko: string; en: string }> = {
-  longstay_10: { ko: '연박 10% 할인', en: '10% Long-Stay Discount' },
-  longstay_15: { ko: '연박 15% 할인', en: '15% Long-Stay Discount' },
-  military_fixed: { ko: 'US Military Special', en: 'US Military Special' },
-};
+// 프로모션 이름·USD 판별은 config/promotion-plan.ts 공용 함수 (snapshot 우선, 옛 예약은 기존 값으로)
 
 /**
  * 메일 본문에 쓸 예약/가격 정보를 정리한다.
@@ -120,8 +117,8 @@ function getBookingDetails(data: BookingFormData, finalAmount?: number, pricing?
   const discountAmount = pricing?.discountAmount ?? 0;
   // 서버에서 검증된 금액 사용; 없으면 base + extra로 계산
   const totalPrice = pricing?.finalAmount ?? finalAmount ?? (basePrice + extraGuestFee);
-  // 미군 특가는 USD 고정 요금이므로 ₩로 표기하면 안 된다
-  const isMilitary = data.appliedPromo === 'military_fixed';
+  // 미군 특가 등 USD 고정 요금은 ₩로 표기하면 안 된다
+  const isMilitary = isUsdBooking({ appliedPromo: data.appliedPromo, pricing });
   const priceText = totalPrice > 0
     ? (isMilitary ? `$${totalPrice.toLocaleString()}` : formatPrice(totalPrice, 'ko'))
     : '-';
@@ -133,8 +130,11 @@ function getBookingDetails(data: BookingFormData, finalAmount?: number, pricing?
   const transportLabel = TRANSPORTATION_LABELS[data.transportation]?.ko || data.transportation || '도보';
   const transportLabelEn = TRANSPORTATION_LABELS[data.transportation]?.en || data.transportation || 'Walk';
   const appliedPromo = data.appliedPromo || null;
-  const promoLabelKo = appliedPromo ? (PROMO_LABELS[appliedPromo]?.ko || appliedPromo) : null;
-  const promoLabelEn = appliedPromo ? (PROMO_LABELS[appliedPromo]?.en || appliedPromo) : null;
+  // 프로모션 이름은 admin 입력값 — HTML에 넣기 전에 이스케이프
+  const promoLabelKoRaw = getBookingPromoLabel({ appliedPromo, pricing }, 'ko');
+  const promoLabelEnRaw = getBookingPromoLabel({ appliedPromo, pricing }, 'en');
+  const promoLabelKo = promoLabelKoRaw ? escapeHtml(promoLabelKoRaw) : null;
+  const promoLabelEn = promoLabelEnRaw ? escapeHtml(promoLabelEnRaw) : null;
   return { room, roomName, roomNameEn, nights, basePrice, basePriceText, extraGuestCount, extraGuestFee, extraGuestFeeUnit, extraFeeText, discountAmount, discountText, totalPrice, priceText, isMilitary, typeLabel, typeLabelEn, transportLabel, transportLabelEn, appliedPromo, promoLabelKo, promoLabelEn };
 }
 
@@ -158,8 +158,9 @@ export async function sendBookingEmail(
   const roomNameEn = room ? getRoomName(room, 'en') : data.roomId;
   const typeLabel = RESERVATION_TYPE_LABELS[data.reservationType]?.ko || data.reservationType;
   const transportLabel = TRANSPORTATION_LABELS[data.transportation]?.ko || data.transportation || '도보';
-  const promoLabelKo = data.appliedPromo ? (PROMO_LABELS[data.appliedPromo]?.ko || data.appliedPromo) : null;
-  const isMilitary = data.appliedPromo === 'military_fixed';
+  const promoLabelKoRaw = getBookingPromoLabel({ appliedPromo: data.appliedPromo, pricing }, 'ko');
+  const promoLabelKo = promoLabelKoRaw ? escapeHtml(promoLabelKoRaw) : null;
+  const isMilitary = isUsdBooking({ appliedPromo: data.appliedPromo, pricing });
 
   // snapshot 기반 가격 텍스트
   const basePriceText = formatPrice(pricing.baseAmount, 'ko');
@@ -431,7 +432,7 @@ export async function sendConfirmationEmail(
               </tr>` : ''}
               ${isMilitary ? `<tr>
                 <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #2e7d32; padding-bottom: 8px;">적용 요금제 / Rate Plan</td>
-                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #2e7d32; padding-bottom: 8px;">US Military Special</td>
+                <td align="right" style="font-family: ${FONT_STACK}; font-size: 12px; font-weight: 600; color: #2e7d32; padding-bottom: 8px;">${promoLabelEn || 'US Military Special'}</td>
               </tr>` : ''}
               ${!isMilitary && discountText ? `<tr>
                 <td style="font-family: ${FONT_STACK}; font-size: 12px; color: #2e7d32; padding-bottom: 8px;">할인 / Discount (${promoLabelKo})</td>

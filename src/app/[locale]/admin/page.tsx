@@ -11,6 +11,8 @@ import { useState, useCallback, useEffect, Fragment } from 'react';
 import { getRoomById } from '@/config/rooms';
 import { MILITARY_FIXED_RATE_USD } from '@/config/events';
 import RateManager from '@/components/admin/RateManager';
+import PromotionManager from '@/components/admin/PromotionManager';
+import { isUsdBooking, getBookingPromoLabel } from '@/config/promotion-plan';
 
 interface PricingSnapshot {
   baseAmount: number;
@@ -20,6 +22,10 @@ interface PricingSnapshot {
   discountAmount: number;
   finalAmount: number;
   nights: number;
+  promoId?: string;
+  promoLabel?: string;
+  promoLabelEn?: string;
+  currency?: 'KRW' | 'USD';
 }
 
 interface BookingRecord {
@@ -159,13 +165,13 @@ function calculateNights(checkIn: string, checkOut: string): number {
 
 /**
  * Smart currency display:
- * - military_fixed → 저장된 USD 금액 (요금 변경 시 과거 예약이 소급되지 않도록)
+ * - USD 예약(미군 특가 등) → 저장된 USD 금액 (요금 변경 시 과거 예약이 소급되지 않도록)
  * - KRW finalAmount → "63,000원"
  * - Missing finalAmount (legacy) → fallback to base price estimate
  */
 function formatDisplayPrice(b: BookingRecord): { text: string; isFallback: boolean } {
-  // Military fixed rate: always USD — 예약 시점에 저장된 금액을 쓴다
-  if (b.appliedPromo === 'military_fixed') {
+  // USD 예약 — 예약 시점에 저장된 금액을 쓴다 (추정치는 snapshot 없는 옛 미군 예약에만)
+  if (isUsdBooking(b)) {
     const stored = b.pricing?.finalAmount ?? b.finalAmount;
     if (stored != null && stored > 0) return { text: `$${stored.toLocaleString()}`, isFallback: false };
     const nights = calculateNights(b.formData.checkIn, b.formData.checkOut);
@@ -198,7 +204,7 @@ export default function AdminPage() {
   const [cancellingToken, setCancellingToken] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // 상단 탭 — 요금 관리는 숨김 처리만 해서 탭을 오가도 편집 중인 값이 유지된다
-  const [activeTab, setActiveTab] = useState<'bookings' | 'rates'>('bookings');
+  const [activeTab, setActiveTab] = useState<'bookings' | 'rates' | 'promotions'>('bookings');
 
   // --- Cloudflare 통계 ---
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
@@ -406,7 +412,7 @@ export default function AdminPage() {
 
       {/* 상단 탭 */}
       <div className="flex gap-1 mt-3">
-        {([['bookings', '예약 관리'], ['rates', '요금 관리']] as const).map(([key, label]) => (
+        {([['bookings', '예약 관리'], ['rates', '요금 관리'], ['promotions', '프로모션 관리']] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -419,6 +425,10 @@ export default function AdminPage() {
 
       <div className={activeTab === 'rates' ? '' : 'hidden'}>
         <RateManager adminKey={password} active={activeTab === 'rates'} />
+      </div>
+
+      <div className={activeTab === 'promotions' ? '' : 'hidden'}>
+        <PromotionManager adminKey={password} active={activeTab === 'promotions'} />
       </div>
 
       <div className={activeTab === 'bookings' ? '' : 'hidden'}>
@@ -693,7 +703,7 @@ export default function AdminPage() {
                         {(() => {
                           const { text, isFallback } = formatDisplayPrice(b);
                           if (text === '-') return <span className="text-slate-400">-</span>;
-                          if (b.appliedPromo === 'military_fixed') return <span className="text-blue-700 font-bold">{text}</span>;
+                          if (isUsdBooking(b)) return <span className="text-blue-700 font-bold">{text}</span>;
                           if (isFallback) return <span className="text-slate-400" title="추정치">{text}</span>;
                           return <span className="text-slate-700">{text}</span>;
                         })()}
@@ -740,7 +750,7 @@ export default function AdminPage() {
                             </div>
                             <div>
                               <span className="text-slate-400 block">프로모션</span>
-                              <span className="text-slate-700 mt-0.5 block">{b.appliedPromo ? (b.appliedPromo === 'military_fixed' ? 'US Military' : b.appliedPromo === 'longstay_15' ? '연박15%' : b.appliedPromo === 'longstay_10' ? '연박10%' : b.appliedPromo) : '-'}</span>
+                              <span className="text-slate-700 mt-0.5 block">{getBookingPromoLabel(b, 'ko') || '-'}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 block">군인할인</span>

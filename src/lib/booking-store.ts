@@ -25,6 +25,11 @@ export interface PricingSnapshot {
   discountAmount: number;     // 할인 금액 (프로모션)
   finalAmount: number;        // 최종 결제 금액
   nights: number;             // 숙박 일수
+  // 프로모션 (2026-11 이후 예약) — 예약 당시 이름·통화를 그대로 남겨 이후 설정이 바뀌어도 기록이 흔들리지 않게 한다
+  promoId?: string;
+  promoLabel?: string;        // 한국어 이름
+  promoLabelEn?: string;      // 영어 이름
+  currency?: 'KRW' | 'USD';   // finalAmount 통화 (없으면 KRW, 옛 미군 예약은 appliedPromo로 판별)
 }
 
 export interface StoredBooking {
@@ -38,7 +43,7 @@ export interface StoredBooking {
   cancelReason?: string;
   cancelledBy?: 'hotel' | 'customer' | 'admin';
   agreedAt: string; // ISO timestamp — legal proof of cancellation policy agreement
-  appliedPromo?: 'longstay_10' | 'longstay_15' | 'military_fixed' | null;
+  appliedPromo?: string | null;
   finalAmount?: number; // Discounted total (KRW) — source of truth for emails/admin
   pricing?: PricingSnapshot; // 서버 계산 가격 snapshot
 }

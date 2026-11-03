@@ -12,6 +12,8 @@ export const runtime = 'edge';
 import dynamic from 'next/dynamic';
 import { Locale } from '@/types';
 import HeroSection from '@/components/sections/HeroSection';
+import { getPromotionConfig } from '@/lib/promotion-store';
+import { getKstToday, toPublicPromotions } from '@/config/promotion-plan';
 
 const BookingBar = dynamic(() => import('@/components/BookingBar'), {
   ssr: false,
@@ -87,6 +89,8 @@ function HotelJsonLd({ locale }: { locale: string }) {
 
 export default async function HomePage({ params }: HomePageProps) {
   const { locale } = params;
+  // admin '프로모션 관리'에서 노출 중인 프로모션만
+  const promotions = toPublicPromotions(await getPromotionConfig(), locale as Locale, getKstToday());
 
   return (
     <>
@@ -96,7 +100,7 @@ export default async function HomePage({ params }: HomePageProps) {
       {/* Booking Bar - Quick Reservation */}
       <BookingBar locale={locale as Locale} />
       {/* Special Offers Section */}
-      <SpecialOffersSection locale={locale as Locale} />
+      <SpecialOffersSection locale={locale as Locale} promotions={promotions} />
     </>
   );
 }

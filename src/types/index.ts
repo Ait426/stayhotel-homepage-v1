@@ -63,8 +63,9 @@ export interface BookingFormData {
   guestPhone: string;
   specialRequests?: string;
   agreedToPolicy: boolean;
-  appliedPromo?: 'longstay_10' | 'longstay_15' | 'military_fixed' | null;
-  finalAmount?: number; // Discounted total sent from frontend (KRW)
+  /** 적용 프로모션 id (admin '프로모션 관리'). 옛 예약은 'longstay_10' | 'longstay_15' | 'military_fixed' */
+  appliedPromo?: string | null;
+  finalAmount?: number; // 최종 금액 (KRW, USD 프로모션이면 USD — 서버가 다시 계산해 덮어씀)
 }
 
 export interface BookingResponse {

@@ -9,6 +9,8 @@ export const runtime = 'edge';
 import BookingForm from '@/components/BookingForm';
 import { createTranslator } from '@/lib/translations';
 import { getRateConfig } from '@/lib/rate-store';
+import { getPromotionConfig } from '@/lib/promotion-store';
+import { getKstToday } from '@/config/promotion-plan';
 
 interface BookingPageProps {
   params: { locale: string };
@@ -40,7 +42,8 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
   const initialReservationType = searchParams?.reservationType;
   const initialStep = searchParams?.step;
   // admin '요금 관리'에서 저장한 요금 — 폼 금액이 서버 재계산과 같도록 같은 설정을 넘긴다
-  const rateConfig = await getRateConfig();
+  // admin '프로모션 관리' 설정 — ?promo=<id> 판정을 서버와 같은 기준으로
+  const [rateConfig, promotionConfig] = await Promise.all([getRateConfig(), getPromotionConfig()]);
 
   return (
     <>
@@ -81,6 +84,8 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
               initialReservationType={initialReservationType as 'general' | 'corporate' | 'military' | undefined}
               initialStep={initialStep as 'dates' | 'room' | undefined}
               rateConfig={rateConfig}
+              promotionConfig={promotionConfig}
+              today={getKstToday()}
             />
           </div>
         </div>

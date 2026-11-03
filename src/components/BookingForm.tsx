@@ -12,7 +12,7 @@ import { useTranslations } from '@/lib/translations';
 import { Locale, BookingFormData, ReservationType, TransportationType } from '@/types';
 import { rooms, getRoomName, formatPrice, calculateRoomTotal, calculateExtraGuestFee, getExtraGuestCount } from '@/config/rooms';
 import { RateConfig, resolveSetId } from '@/config/rate-plan';
-import { MILITARY_FIXED_RATE_USD } from '@/config/events';
+import { PromotionConfig, evaluatePromotion, promoRejectText, pickL10n } from '@/config/promotion-plan';
 import { getCancellationPolicy } from '@/config/policy';
 import DatePickerInput from './DatePickerInput';
 import DropdownSelect from './DropdownSelect';
@@ -28,6 +28,10 @@ interface BookingFormProps {
   initialStep?: 'dates' | 'room';
   /** 서버(booking/page.tsx)가 KV에서 읽은 요금 설정 */
   rateConfig: RateConfig;
+  /** 서버가 KV에서 읽은 프로모션 설정 (admin '프로모션 관리') */
+  promotionConfig: PromotionConfig;
+  /** 서버 기준 오늘 (한국 시간) — 프로모션 기간·사전 예약 일수 판정용 */
+  today: string;
 }
 
 type FormStep = 'dates' | 'room' | 'info' | 'confirm' | 'success';
@@ -43,15 +47,15 @@ const transportationOptions: { value: TransportationType; label: Record<Locale, 
   { value: 'car', label: { ko: '차량', en: 'Car', ja: '車', zh: '车辆' } },
 ];
 
-export default function BookingForm({ locale, preselectedRoomId, initialCheckIn, initialCheckOut, initialGuestCount, initialReservationType, initialStep, rateConfig }: BookingFormProps) {
+export default function BookingForm({ locale, preselectedRoomId, initialCheckIn, initialCheckOut, initialGuestCount, initialReservationType, initialStep, rateConfig, promotionConfig, today }: BookingFormProps) {
   const t = useTranslations('booking');
   const tErrors = useTranslations('errors');
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Promo flags — only active when arriving from Events page CTA
-  const isLongstayPromo = searchParams.get('promo') === 'longstay';
-  const isMilitaryPromo = searchParams.get('promo') === 'military';
+  // 프로모션 — 이벤트 페이지의 '이 혜택으로 예약하기'(?promo=<id>)로 들어왔을 때만
+  const promoParam = searchParams.get('promo');
+  const promo = promoParam ? promotionConfig.promotions.find((p) => p.id === promoParam) || null : null;
 
   // Form state
   const [step, setStep] = useState<FormStep>(initialStep || 'dates');
@@ -64,11 +68,11 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
 
   // Form data
   const [formData, setFormData] = useState<BookingFormData>({
-    roomId: isMilitaryPromo ? 'standard' : (preselectedRoomId || ''),
+    roomId: promo?.presets.roomId || preselectedRoomId || '',
     checkIn: initialCheckIn || getTodayString(),
     checkOut: initialCheckOut || getTomorrowString(),
     guestCount: initialGuestCount || 2,
-    reservationType: isMilitaryPromo ? 'military' : (initialReservationType || 'general'),
+    reservationType: promo?.presets.reservationType || initialReservationType || 'general',
     transportation: 'walk',
     guestName: '',
     guestEmail: '',
@@ -112,18 +116,23 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
   const extraGuestFeeTotal = selectedRoom ? calculateExtraGuestFee(selectedRoom, formData.guestCount, nights) : 0;
   const totalPrice = roomBaseTotal + extraGuestFeeTotal;
 
-  // Long-stay promo discount calculation (disabled when military promo is active)
-  const promoBlocked = (isLongstayPromo && formData.reservationType === 'military') || isMilitaryPromo;
-  const promoDiscount = (() => {
-    if (!isLongstayPromo || promoBlocked) return { rate: 0, label: '' as 'longstay_10' | 'longstay_15' | null, amount: 0 };
-    if (nights >= 7) return { rate: 0.15, label: 'longstay_15' as const, amount: totalPrice - Math.floor(totalPrice * 0.85) };
-    if (nights >= 2) return { rate: 0.10, label: 'longstay_10' as const, amount: totalPrice - Math.floor(totalPrice * 0.90) };
-    return { rate: 0, label: null, amount: 0 };
-  })();
-
-  // Military fixed rate: 고정 요금/박 (추가 인원 요금 없음)
-  const militaryFixedRate = isMilitaryPromo ? nights * MILITARY_FIXED_RATE_USD : 0;
-  const finalPrice = isMilitaryPromo ? militaryFixedRate : (promoDiscount.rate > 0 ? totalPrice - promoDiscount.amount : totalPrice);
+  // 프로모션 적용 판정 — 서버(booking-request)와 같은 함수. 최종 금액은 서버가 다시 계산한다
+  const promoResult = promo && selectedRoom
+    ? evaluatePromotion(promo, {
+        checkIn: formData.checkIn,
+        nights,
+        roomId: selectedRoom.id,
+        reservationType: formData.reservationType,
+        roomTotal: roomBaseTotal,
+        extraGuestFee: extraGuestFeeTotal,
+        today,
+      })
+    : null;
+  const promoApplied = promoResult?.ok ? promoResult : null;
+  const promoTitle = promo ? pickL10n(promo.title, locale) : '';
+  const promoNote = promo ? pickL10n(promo.bookingNote, locale) : '';
+  const isUsdPromo = promoApplied?.currency === 'USD';
+  const finalPrice = promoApplied ? promoApplied.finalAmount : totalPrice;
 
   // 전체 객실 중 최대 인원 (드롭다운 상한)
   const overallMaxGuests = Math.max(...rooms.map(r => r.maxGuests));
@@ -239,7 +248,7 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
       // Call API to create booking
       const payload = {
         ...formData,
-        appliedPromo: isMilitaryPromo ? 'military_fixed' : (promoDiscount.label || null),
+        appliedPromo: promoApplied && promo ? promo.id : null,
         finalAmount: finalPrice,
       };
       const response = await fetch('/api/booking-request', {
@@ -312,12 +321,16 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
 
       {/* Form content */}
       <div className="p-4 sm:p-6 md:p-8 lg:p-12">
-        {/* Military Promo Badge */}
-        {isMilitaryPromo && step !== 'success' && (
+        {/* 프로모션 배지 — 적용 조건을 만족할 때만 */}
+        {promoApplied && step !== 'success' && (
           <div className="mb-8 p-4 bg-blue-50 border border-blue-300 flex items-center gap-3">
-            <span className="inline-block px-3 py-1 bg-blue-700 text-white text-xs font-bold uppercase tracking-wider rounded-full flex-shrink-0">US MILITARY</span>
+            <span className="inline-block px-3 py-1 bg-blue-700 text-white text-xs font-bold uppercase tracking-wider rounded-full flex-shrink-0">
+              {isUsdPromo ? 'US MILITARY' : 'PROMO'}
+            </span>
             <span className="text-blue-900 text-sm font-medium">
-              {{ ko: `US Military Special Rate 적용 ($${MILITARY_FIXED_RATE_USD} 고정)`, en: `US Military Special Rate Applied ($${MILITARY_FIXED_RATE_USD} Fixed)`, ja: `US Military Special Rate 適用 ($${MILITARY_FIXED_RATE_USD} 固定)`, zh: `US Military Special Rate 已应用 ($${MILITARY_FIXED_RATE_USD} 固定)` }[locale]}
+              {promoTitle}
+              {promoApplied.percent !== null && ` · ${promoApplied.percent}%`}
+              {isUsdPromo && ` ($${promoApplied.pricePerNight})`}
             </span>
           </div>
         )}
@@ -657,21 +670,23 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
               </div>
 
               <div className="p-4 bg-neutral-50">
-                {isMilitaryPromo ? (
+                {isUsdPromo && promoApplied ? (
                   <>
                     <div className="flex justify-between mb-2">
-                      <span className="text-neutral-500 text-sm">US Military Special Rate</span>
+                      <span className="text-neutral-500 text-sm">{promoTitle}</span>
                       <span className="font-medium text-primary-900">
-                        ${MILITARY_FIXED_RATE_USD} × {nights} {{ ko: '박', en: ' nights', ja: '泊', zh: '晚' }[locale]}
+                        ${promoApplied.pricePerNight} × {nights} {{ ko: '박', en: ' nights', ja: '泊', zh: '晚' }[locale]}
                       </span>
                     </div>
-                    <div className="p-3 mb-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs">
-                      {{ ko: `$${MILITARY_FIXED_RATE_USD} 고정 요금 적용 (주말 할증 없음) · 디럭스 무료 업그레이드 · 1인 조식 포함`, en: `Flat $${MILITARY_FIXED_RATE_USD}/night (No weekend surcharge) · Free Deluxe upgrade · Breakfast for 1 included`, ja: `$${MILITARY_FIXED_RATE_USD}固定料金適用（週末割増なし）· デラックス無料UP · 朝食1名付`, zh: `$${MILITARY_FIXED_RATE_USD}固定价格（无周末加价）· 免费升级豪华房 · 含1人早餐` }[locale]}
-                    </div>
+                    {promoNote && (
+                      <div className="p-3 mb-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs">
+                        {promoNote}
+                      </div>
+                    )}
                     <div className="flex justify-between pt-4 border-t border-neutral-200">
                       <span className="font-medium text-primary-900">{t('total')}</span>
                       <span className="font-serif text-2xl text-accent-500">
-                        ${militaryFixedRate}
+                        ${promoApplied.finalAmount}
                       </span>
                     </div>
                   </>
@@ -687,8 +702,8 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
                         </span>
                       </span>
                     </div>
-                    {/* 추가 인원 요금 */}
-                    {extraGuestFeeTotal > 0 && selectedRoom && (
+                    {/* 추가 인원 요금 (원화 고정가가 면제하면 표시하지 않음) */}
+                    {extraGuestFeeTotal > 0 && selectedRoom && !promoApplied?.extraGuestFeeWaived && (
                       <div className="flex justify-between mb-2 text-amber-700">
                         <span className="text-sm">
                           {{ ko: `추가 인원 ${getExtraGuestCount(selectedRoom, formData.guestCount)}명 × ${nights}박 × ₩10,000`, en: `Extra guest ×${getExtraGuestCount(selectedRoom, formData.guestCount)} × ${nights} nights × ₩10,000`, ja: `追加${getExtraGuestCount(selectedRoom, formData.guestCount)}名 × ${nights}泊 × ₩10,000`, zh: `加人${getExtraGuestCount(selectedRoom, formData.guestCount)}位 × ${nights}晚 × ₩10,000` }[locale]}
@@ -696,26 +711,26 @@ export default function BookingForm({ locale, preselectedRoomId, initialCheckIn,
                         <span className="font-medium">+{formatCurrency(extraGuestFeeTotal, locale)}</span>
                       </div>
                     )}
-                    {/* Long-stay promo discount line */}
-                    {isLongstayPromo && promoBlocked && (
+                    {/* 프로모션 적용 불가 사유 */}
+                    {promoResult && !promoResult.ok && (
                       <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-700 text-xs">
-                        {{ ko: '다른 이벤트(미군 특가 등)와 중복 적용할 수 없습니다.', en: 'Cannot combine with other offers (Military Special, etc.).', ja: '他のイベント（米軍特価など）との併用はできません。', zh: '不可与其他优惠（美军特价等）同时使用。' }[locale]}
+                        {promoTitle} — {promoRejectText(promoResult.reason, promoResult.required, locale)}
                       </div>
                     )}
-                    {isLongstayPromo && !promoBlocked && nights < 2 && (
-                      <div className="p-3 mb-2 bg-red-50 border border-red-200 text-red-700 text-xs">
-                        {{ ko: '연박 할인은 최소 2박 이상 예약 시에만 적용됩니다.', en: 'Long-stay discount requires a minimum of 2 nights.', ja: '連泊割引は2泊以上のご予約にのみ適用されます。', zh: '连住折扣仅适用于2晚以上的预订。' }[locale]}
-                      </div>
-                    )}
-                    {isLongstayPromo && promoDiscount.rate > 0 && (
+                    {/* 프로모션 할인 */}
+                    {promoApplied && promoApplied.discountAmount > 0 && (
                       <div className="flex justify-between mb-2 text-green-700">
                         <span className="text-sm font-medium">
-                          {nights >= 7
-                            ? { ko: '7박 이상 15% 연박 할인', en: '7+ nights 15% long-stay discount', ja: '7泊以上 15%連泊割引', zh: '7晚以上 15%连住折扣' }[locale]
-                            : { ko: '2박 이상 10% 연박 할인', en: '2+ nights 10% long-stay discount', ja: '2泊以上 10%連泊割引', zh: '2晚以上 10%连住折扣' }[locale]
-                          }
+                          {promoTitle}
+                          {promoApplied.percent !== null && ` (${promoApplied.percent}%)`}
+                          {promoApplied.pricePerNight !== null && ` (${formatCurrency(promoApplied.pricePerNight, locale)} × ${nights})`}
                         </span>
-                        <span className="font-medium">-{formatCurrency(promoDiscount.amount, locale)}</span>
+                        <span className="font-medium">-{formatCurrency(promoApplied.discountAmount, locale)}</span>
+                      </div>
+                    )}
+                    {promoApplied && promoNote && (
+                      <div className="p-3 mb-2 bg-blue-50 border border-blue-200 text-blue-800 text-xs">
+                        {promoNote}
                       </div>
                     )}
                     <div className="flex justify-between pt-4 border-t border-neutral-200">

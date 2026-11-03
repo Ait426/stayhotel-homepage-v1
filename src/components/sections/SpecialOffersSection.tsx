@@ -5,7 +5,8 @@
  *
  * Tab-filtered grid of offer cards.
  * 카드 클릭 → 혜택 상세 모달 즉시 오픈 (events 페이지 이동 X)
- * CTA 버튼은 showHomeCta 이벤트(미군/연박)에만 노출, 클릭 시에도 모달 오픈
+ * CTA 문구는 admin에서 '홈 카드에도 표시'를 켠 프로모션에만 노출, 클릭 시에도 모달 오픈
+ * 데이터는 홈 페이지(서버)가 노출 중인 프로모션만 언어별로 풀어서 넘긴다
  * 실제 예약 이동은 모달 내부 기존 CTA에서만 발생
  */
 
@@ -13,12 +14,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Locale } from '@/types';
-import { offers, Offer, TabType } from '@/config/events';
+import { TabType } from '@/config/events';
+import { PublicPromotion } from '@/config/promotion-plan';
 
 const BLUR_PLACEHOLDER = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAADAAQDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAABv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AhgA//9k=';
 
 interface SpecialOffersSectionProps {
   locale: Locale;
+  promotions: PublicPromotion[];
 }
 
 const tabs: { key: TabType; label: { ko: string; en: string; ja: string; zh: string } }[] = [
@@ -27,11 +30,9 @@ const tabs: { key: TabType; label: { ko: string; en: string; ja: string; zh: str
   { key: 'event', label: { ko: '이벤트', en: 'EVENTS', ja: 'イベント', zh: '活动' } },
 ];
 
-export default function SpecialOffersSection({ locale }: SpecialOffersSectionProps) {
+export default function SpecialOffersSection({ locale, promotions }: SpecialOffersSectionProps) {
   const [activeTab, setActiveTab] = useState<TabType>('all');
-  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
-
-  const loc = locale as 'ko' | 'en' | 'ja' | 'zh';
+  const [selectedOffer, setSelectedOffer] = useState<PublicPromotion | null>(null);
 
   // 모달 Escape 닫기
   useEffect(() => {
@@ -54,8 +55,8 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
   }, [selectedOffer]);
 
   const filteredOffers = activeTab === 'all'
-    ? offers
-    : offers.filter(offer => offer.type === activeTab);
+    ? promotions
+    : promotions.filter(offer => offer.tab === activeTab);
 
   const detailsTitle: Record<string, string> = {
     ko: '이용 안내 및 주의사항',
@@ -69,13 +70,6 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
     en: 'Close',
     ja: '閉じる',
     zh: '关闭',
-  };
-
-  const ctaLabel: Record<string, string> = {
-    ko: '이 혜택으로 예약하기',
-    en: 'Book with this offer',
-    ja: 'この特典で予約する',
-    zh: '以此优惠预订',
   };
 
   return (
@@ -116,7 +110,7 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
               <div className="aspect-[4/3] relative overflow-hidden">
                 <Image
                   src={offer.image}
-                  alt={offer.title[locale]}
+                  alt={offer.title}
                   fill
                   className="object-cover transition-transform duration-700 group-hover:scale-110"
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -136,30 +130,30 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
               <div className="p-6">
                 {/* Subtitle/Badge */}
                 <span className="text-xs text-accent-500 tracking-widest uppercase">
-                  {offer.subtitle[locale]}
+                  {offer.subtitle}
                 </span>
 
                 {/* Title */}
                 <h3 className="font-serif text-xl text-primary-900 mt-2 mb-2 tracking-wide group-hover:text-accent-500 transition-colors">
-                  {offer.title[locale]}
+                  {offer.title}
                 </h3>
 
                 {/* Description */}
                 <p className="text-sm text-neutral-500 mb-4">
-                  {offer.desc[locale]}
+                  {offer.desc}
                 </p>
 
                 {/* Period + CTA */}
                 <div className="pt-4 border-t border-neutral-100 flex items-center justify-between">
                   <span className="text-xs text-neutral-400">
-                    {offer.period[locale]}
+                    {offer.period}
                   </span>
                   {offer.showHomeCta ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedOffer(offer); }}
                       className="text-xs font-medium text-accent-600 hover:text-accent-700 tracking-wide transition-colors"
                     >
-                      {ctaLabel[locale]}
+                      {offer.ctaLabel}
                     </button>
                   ) : (
                     <svg
@@ -226,16 +220,16 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
             <div className="aspect-[16/9] relative overflow-hidden">
               <img
                 src={selectedOffer.image}
-                alt={selectedOffer.title[loc]}
-                className={`w-full h-full object-cover ${selectedOffer.id === 5 ? 'scale-[1.35]' : ''}`}
+                alt={selectedOffer.title}
+                className={`w-full h-full object-cover ${selectedOffer.imageZoom ? 'scale-[1.35]' : ''}`}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 p-8">
                 <span className="text-xs text-accent-400 tracking-widest uppercase font-medium">
-                  {selectedOffer.subtitle[loc]}
+                  {selectedOffer.subtitle}
                 </span>
                 <h2 className="text-2xl md:text-3xl font-serif text-white mt-2 tracking-wide">
-                  {selectedOffer.title[loc]}
+                  {selectedOffer.title}
                 </h2>
               </div>
             </div>
@@ -243,14 +237,14 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
             {/* Body */}
             <div className="p-4 sm:p-6 md:p-8">
               <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                {selectedOffer.desc[loc]}
+                {selectedOffer.desc}
               </p>
 
               <div className="flex items-center gap-2 mb-4 text-xs text-gray-400 tracking-wider">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                {selectedOffer.period[loc]}
+                {selectedOffer.period}
               </div>
 
               {/* Divider */}
@@ -261,7 +255,7 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
                 {detailsTitle[locale]}
               </h3>
               <ul className="space-y-3">
-                {selectedOffer.details[loc].map((item, idx) => (
+                {selectedOffer.details.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-3 text-sm text-gray-600 leading-relaxed">
                     <span className="text-accent-500 mt-1 flex-shrink-0">
                       <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -275,20 +269,12 @@ export default function SpecialOffersSection({ locale }: SpecialOffersSectionPro
 
               {/* CTA + Close — 모달 내부 CTA만 실제 예약 이동 */}
               <div className="mt-8 flex flex-col items-center gap-3 w-full">
-                {selectedOffer.id === 1 && (
+                {selectedOffer.ctaHref && (
                   <a
-                    href={`/${locale}/booking?promo=longstay`}
+                    href={selectedOffer.ctaHref}
                     className="block w-full sm:w-auto text-center px-10 py-4 sm:py-3 bg-accent-500 text-primary-900 text-sm font-bold tracking-widest uppercase transition-all duration-300 hover:bg-primary-900 hover:text-white"
                   >
-                    {ctaLabel[locale]}
-                  </a>
-                )}
-                {selectedOffer.id === 4 && (
-                  <a
-                    href="/en/booking?promo=military"
-                    className="block w-full sm:w-auto text-center px-10 py-4 sm:py-3 bg-accent-500 text-primary-900 text-sm font-bold tracking-widest uppercase transition-all duration-300 hover:bg-primary-900 hover:text-white"
-                  >
-                    US Military Special — Book Now
+                    {selectedOffer.ctaLabel}
                   </a>
                 )}
                 <button
